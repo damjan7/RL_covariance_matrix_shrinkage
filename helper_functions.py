@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, p):
+def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, rebalancing_date_plus_one,  p):
     """
     This function returns the p largest stocks for some given rebalancing date.
     It should also include a filter for stocks that lack observations for the most recent 252 trading days.
@@ -16,29 +16,40 @@ def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before,
     tmp = df[df['date'] == rebalancing_date]
     tmp = tmp.sort_values("MARKET_CAP", ascending=False)
     tmp = tmp.iloc[0:2*p]
+
+    # I think the below line of code keeps the ordering of the dataframe when creating the list
+    # may need to check this!
     permno = list(tmp['PERMNO'])  # contains double the needed number of stocks in case some need to be discarded
 
     # filter for stocks that lack observations for the most recent 252 trading days
     # at most 5% NaN values among the last 252 trading days
     # first filter dataframe for the last 252 trading days
-    tmp_df = df[df['PERMNO'].isin(permno)]
-    tmp_df = tmp_df[(tmp_df['date'] < rebalancing_date) & (tmp_df['date']) >= rebalancing_date_12months_before]
+    df = df[df['PERMNO'].isin(permno)]
+    tmp_df = df[(df['date'] < rebalancing_date) & (df['date']) >= rebalancing_date_12months_before]
+    tmp_df2 = df[(df['date'] > rebalancing_date) & (df['date']) <= rebalancing_date_plus_one]
 
-    #the temp df should contain roughly 252 observations --> check how many are NaN for each PERMNO
+    # the temp df should contain roughly 252 observations --> check how many are NaN for each PERMNO
     tmp_df_wide = tmp_df.pivot(index='date', columns='PERMNO', values='RET')
     filter_idx = tmp_df_wide.isna().sum() / tmp_df_wide.shape[0] > 0.05  # are more than 5% values NaN's?
     filter_values = filter_idx[filter_idx == True].index.values
 
-    # can add a check that if in the p PERMNO numbers we don't have too many missing values,
-    # we can directly return them..
+    # check if for the next 21 trading days we have NO missing values
+    tmp_df2_wide = tmp_df2.pivot(index='date', columns='PERMNO', values='RET')
+    filter_idx2 = tmp_df2_wide.isna().sum() > 0
+    filter_values2 = filter_idx2[filter_idx2 == True].index.values
 
-    for v in filter_values:
+    if rebalancing_date == 19980123:
+        print("test")
+
+    filter = set(filter_values + filter_values2)
+
+    for v in filter:
         permno.remove(v)
     assert len(permno) >= p  # if not we have a problem
     return permno[0:p]
 
 
-def get_p_largest_stocks_all_reb_dates(df, rebalancing_dates, trading_dates_plus, p):
+def get_p_largest_stocks_all_reb_dates(df, rebalancing_dates, p):
     """
     returns the p largest stocks for all rebalancing days for the whole considered dataset
     :param df:
@@ -49,14 +60,13 @@ def get_p_largest_stocks_all_reb_dates(df, rebalancing_dates, trading_dates_plus
     :return: a dataframe containing all p largest stocks for all rebalancing dates
     """
     res = []
-    tmp_idx = np.where(trading_dates_plus == rebalancing_dates[0])[0]  # [0] to access the value of the tuple
+    #tmp_idx = np.where(trading_dates_plus == rebalancing_dates[0])[0]  # [0] to access the value of the tuple
+    # last portfolio is built with the second to last rebalancing date
     for idx, reb_date in enumerate(rebalancing_dates):
-        if idx < 12:  # in this case use trading_days_plus to get the previous 252 trading days
-            reb_start = trading_dates_plus[tmp_idx - (12-idx) * 21][0]
-        else:
+        if len(rebalancing_dates)-1 >= idx >= 12:  # because first 12 entries are of previous data we need
             reb_start = rebalancing_dates[idx - 12]
-        permno_nums = get_p_largest_stocks(df, reb_date, reb_start, p)
-        res.append([reb_date] + permno_nums)  # need reb_date as a list
+            permno_nums = get_p_largest_stocks(df, reb_date, reb_start, rebalancing_dates[idx+1],p)
+            res.append([reb_date] + permno_nums)  # need reb_date as a list
 
     res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, 101)])
     return res
@@ -75,21 +85,48 @@ def filter_years(df, start_date, end_date):
     df2 = df[(start_date <= df['date']) & (df['date'] <= end_date)]
     return df2
 
-def load_peprocess(path, start_date, end_date):
+def load_peprocess(path, end_date, out_of_sample_period_length, estimation_window_length):
     """
     Loads data
     Applies necessary preprocessing steps before working with the data.
     Returns the same dataframe, but correctly preprocessed.
     :param path: path to dataframe with columns ['PERMNO', 'date', 'SHRCD', 'EXCHCD', 'PRC', 'RET', 'SHROUT']
-    :param start_date: start date which we consider in correct format! YYYY/MM/DD
     :param end_date: end date which we consider in correct format! YYYY/MM/DD
-    :return: preprocessed dataframe; removed columns ['SHRCD', 'EXCHCD'], added column ['MARKET_CAP']
+    :param out_of_sample_period_length: in years, i.e. 1 year = 12*21 trading days
+    :param estimation_window_length: in years, i.e. 1 year = 12*21 trading days
+    :return: preprocessed dataframe; removed columns ['SHRCD', 'EXCHCD'], added column ['MARKET_CAP'], also returns
+    trading days and rebalancing dates
     """
     data = pd.read_csv(path, dtype={'RET': np.float64}, na_values=['B', 'C'])
     data = data.drop(["SHRCD", "EXCHCD"], axis=1)
     data["MARKET_CAP"] = np.abs(data["PRC"]) * data["SHROUT"]
-    data = data[(start_date <= data['date']) & (data['date'] <= end_date)]
-    return data
+
+    data = data[data['date'] <= end_date]
+
+    trading_dates = sorted(data['date'].unique(), reverse=True)
+    start_date = trading_dates[12*21*(out_of_sample_period_length + estimation_window_length)-1]
+    actual_trading_dates = trading_dates[0: 12*21*(out_of_sample_period_length + estimation_window_length)]
+    idx = [i for i in range(len(actual_trading_dates)) if i % 21 == 0]
+
+    # this contains also the 12 "rebalancing" dates before the actual first rebalancing date
+    rebalancing_dates_plus = sorted([actual_trading_dates[i] for i in idx])
+
+    # sort actual trading dates in correct order
+    actual_trading_dates = sorted(actual_trading_dates)
+
+
+    # some small assertions to check whether code works as intended
+    assert actual_trading_dates[-1] == rebalancing_dates_plus[-1]
+    # is the number rebalancing dates equal to the number of considered "trading" months
+    assert len(rebalancing_dates_plus) == 12 * (estimation_window_length + out_of_sample_period_length)
+    assert len(actual_trading_dates) == 12 * 21 * (estimation_window_length + out_of_sample_period_length)
+
+    data = data[start_date <= data['date']]
+
+    # currently, the actual trading dates may include some dates before
+    # the "first" rebalancing date... do i need these additional days??
+    return data, actual_trading_dates, rebalancing_dates_plus, start_date
+
 
 def get_trading_rebalancing_dates(df):
     """
