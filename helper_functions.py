@@ -25,8 +25,8 @@ def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before,
     # at most 5% NaN values among the last 252 trading days
     # first filter dataframe for the last 252 trading days
     df = df[df['PERMNO'].isin(permno)]
-    tmp_df = df[(df['date'] < rebalancing_date) & (df['date']) >= rebalancing_date_12months_before]
-    tmp_df2 = df[(df['date'] > rebalancing_date) & (df['date']) <= rebalancing_date_plus_one]
+    tmp_df = df[(df['date'] < rebalancing_date) & (df['date'] >= rebalancing_date_12months_before)]
+    tmp_df2 = df[(df['date'] > rebalancing_date) & (df['date'] <= rebalancing_date_plus_one)]
 
     # the temp df should contain roughly 252 observations --> check how many are NaN for each PERMNO
     tmp_df_wide = tmp_df.pivot(index='date', columns='PERMNO', values='RET')
@@ -38,12 +38,9 @@ def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before,
     filter_idx2 = tmp_df2_wide.isna().sum() > 0
     filter_values2 = filter_idx2[filter_idx2 == True].index.values
 
-    if rebalancing_date == 19980123:
-        print("test")
+    filter = set(list(filter_values) + list(filter_values2))
 
-    filter = set(filter_values + filter_values2)
-
-    for v in filter:
+    for v in filter_values:
         permno.remove(v)
     assert len(permno) >= p  # if not we have a problem
     return permno[0:p]
@@ -58,17 +55,19 @@ def get_p_largest_stocks_all_reb_dates(df, rebalancing_dates, p):
     :param end_date:
     :param p:
     :return: a dataframe containing all p largest stocks for all rebalancing dates
+    the rebalancing dates are the !index! of the returned dataframe
     """
     res = []
     #tmp_idx = np.where(trading_dates_plus == rebalancing_dates[0])[0]  # [0] to access the value of the tuple
     # last portfolio is built with the second to last rebalancing date
     for idx, reb_date in enumerate(rebalancing_dates):
-        if len(rebalancing_dates)-1 >= idx >= 12:  # because first 12 entries are of previous data we need
+        if len(rebalancing_dates)-1 > idx >= 12:  # because first 12 entries are of previous data we need
             reb_start = rebalancing_dates[idx - 12]
-            permno_nums = get_p_largest_stocks(df, reb_date, reb_start, rebalancing_dates[idx+1],p)
+            permno_nums = get_p_largest_stocks(df, reb_date, reb_start, rebalancing_dates[idx+1], p)
             res.append([reb_date] + permno_nums)  # need reb_date as a list
 
     res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, 101)])
+    res = res.set_index("rebalancing_date")
     return res
 
 
@@ -109,6 +108,7 @@ def load_peprocess(path, end_date, out_of_sample_period_length, estimation_windo
     idx = [i for i in range(len(actual_trading_dates)) if i % 21 == 0]
 
     # this contains also the 12 "rebalancing" dates before the actual first rebalancing date
+
     rebalancing_dates_plus = sorted([actual_trading_dates[i] for i in idx])
 
     # sort actual trading dates in correct order
@@ -147,7 +147,7 @@ def get_return_matrix(df, rebalancing_date, rebalancing_date_12months_before, pe
     Also, the remaining NaN's are filled with zeros
     :param df: full data matrix
     :param rebalancing_date: rebalancing date
-    :param permno: p stocks with the largest market cap without more than 5% of NaN's in past 252 trading days
+    :param permno: list of p stocks with the largest market cap without more than 5% of NaN's in past 252 trading days
     :return: return matrix in wide format [n * p], dates on y axis, stocks on x axis
     """
     tmp_df = df[(rebalancing_date_12months_before <= df['date']) & (df['date'] < rebalancing_date)]
@@ -165,13 +165,13 @@ def demean_return_matrix(df):
     :return: de-meaned return matrix
     """
     # assert df.shape[0] == 252
-    df_demeaned = df - df.means()  # df.means() contains the means of each column (= each stock)
+    df_demeaned = df - df.mean()  # df.mean() contains the means of each column (= each stock)
     return df_demeaned
 
 
 def calc_global_min_variance_pf(covmat_estimator):
     """
-    Calculates the global minimum portfolio WITHOUT SHORT SELLING CONSTRAINTS
+    Calculates the global minimum portfolio WITHOUT SHORT SELLING CONSTRAINTS [??for demeaned covmats??]
     :param covmat_estimator: covariance matrix estimator of shape p x p
     :return: portfolio weights
     """
@@ -179,4 +179,21 @@ def calc_global_min_variance_pf(covmat_estimator):
     inv_covmat = np.linalg.inv(covmat_estimator)
     w = inv_covmat @ vec_ones @ np.linalg.inv(vec_ones.T @ inv_covmat @ vec_ones)
     return w
+
+
+def get_full_rebalancing_dates_matrix(rebalancing_days):
+    """
+    Given the rebalancing dates, return the full rebalancing dates matrix containing the current rebalancing date,
+    the rebalancing date 12 months before, and the rebalancing date 1 month in the future
+    :param rebalancing_dates:
+    :return: full rebalancing days matrix
+    """
+
+    rebalancing_days_full = {
+    "actual_reb_day" : rebalancing_days[12:len(rebalancing_days)-1],
+    "prev_reb_day" : rebalancing_days[0:len(rebalancing_days)-13],
+    "fut_reb_day" : rebalancing_days[13:len(rebalancing_days)]
+    }
+    rebalancing_days_full = pd.DataFrame(rebalancing_days_full)
+    return rebalancing_days_full
 
