@@ -3,7 +3,7 @@ import pandas as pd
 import helper_functions as hf
 
 
-class CovMatEstimator:
+class CovMatEstimation:
 
     def __init__(self, raw_data, start_date, end_date, pf_size):
         self.raw_data = raw_data
