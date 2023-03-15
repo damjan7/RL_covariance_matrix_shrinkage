@@ -25,7 +25,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     # fill the remaining NaN's in the 'RET' column with zeros
     df['RET'] = df['RET'].fillna(0)
 
-    # actually only need to do this if it had not been done before as it is the same, independent of p
+
     past_return_matrices = []
     future_return_matrices = []
     # future return matrices do not need to be demeaned of course!

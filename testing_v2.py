@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 import helper_functions as hf
-from cov1Para import cov1Para
+from estimators_testing import cov1Para
 
 base_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
 
@@ -43,7 +43,6 @@ for idx, date in enumerate(rebalancing_days_full['actual_reb_day']):
     # this was used to calculate the covariance matrices and determine the weights of the PF for the next 21 days
     monthly_portfolio_returns.append(hf.calc_monthly_return(future_return_matrices[idx]).values)  # values only
     monthly_portfolio_returns_with_permno.append(hf.calc_monthly_return(future_return_matrices[idx]))
-
 
 
 
