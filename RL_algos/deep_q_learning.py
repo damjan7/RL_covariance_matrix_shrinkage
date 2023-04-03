@@ -15,7 +15,7 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.state_space = num_features
         self.action_space = num_actions
-        self.hidden = 64
+        self.hidden = 100
         self.l1 = nn.Linear(self.state_space, self.hidden, bias=True)
         self.l2 = nn.Linear(self.hidden, self.hidden, bias=True)
         self.l3 = nn.Linear(self.hidden, self.action_space, bias=True)
@@ -129,7 +129,7 @@ def train_step(states, actions, rewards, next_states, dones):
 
 
 # Hyperparameters.
-num_episodes = 3000
+num_episodes = 4000
 epsilon = 1.0
 batch_size = 32
 discount = 0.99
@@ -165,11 +165,17 @@ for episode in range(num_episodes+1):
       states, actions, rewards, next_states, dones = buffer.sample(batch_size)
       loss = train_step(states, actions, rewards, next_states, dones)  # updates weights of nn for each batch
 
-  scheduler.step()    # let's see if this improves performance
+  # scheduler outside of train loop
+  scheduler.step()  # let's see if this improves performance
+
 
 
   if episode < 2000 and epsilon > 0.05:
     epsilon -= 0.0005
+  if 0 < epsilon <= 0.05:
+      epsilon -= 0.0001
+  if epsilon < 0:
+      epsilon = 0
 
   if len(last_100_ep_rewards) == 100:
     last_100_ep_rewards = last_100_ep_rewards[1:]
@@ -181,54 +187,6 @@ for episode in range(num_episodes+1):
     print(f"learning rate: {optimizer.param_groups[0]['lr']}")
 
 env.close()
-
-
-### TEST MY NN on the env with visualization
-
-"""
-def show_video():
-  '''Enables video recording of gym environment and shows it.'''
-  mp4list = glob.glob('video/*.mp4')
-  if len(mp4list) > 0:
-    mp4 = mp4list[0]
-    video = io.open(mp4, 'r+b').read()
-    encoded = base64.b64encode(video)
-    ipythondisplay.display(HTML(data='''<video alt="test" autoplay 
-                loop controls style="height: 400px;">
-                <source src="data:video/mp4;base64,{0}" type="video/mp4" />
-             </video>'''.format(encoded.decode('ascii'))))
-  else: 
-    print("Video not found")
-
-def wrap_env(env):
-  env = Monitor(env, './video', force=True)
-  return env
-
-
-env = wrap_env(gym.make('CartPole-v1'))
-state = env.reset()
-done = False
-ep_rew = 0
-while not done:
-  env.render()
-  state = state.astype(np.float32)
-  state = torch.from_numpy(np.expand_dims(state, axis=0)).to(device)
-  action = select_epsilon_greedy_action(state, epsilon=0.01)
-  state, reward, done, info = env.step(action)
-  ep_rew += reward
-print('Return on this episode: {}'.format(ep_rew))
-env.close()
-show_video()
-"""
-
-
-
-
-
-
-
-
-
 
 
 
