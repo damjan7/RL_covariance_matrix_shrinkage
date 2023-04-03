@@ -53,3 +53,23 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
     print("done")
 
+
+
+
+##### Let's call the function to create the necessary data frames
+
+in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
+end_date = 20171231
+estimation_window_length = 1
+out_of_sample_period_length = 20
+pf_size = 50  # [30, 50, 100, 225, 500]
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
+
+create_data_matrices(path=in_path,
+                     end_date=end_date,
+                     p=pf_size,
+                     out_pf_sample_period_length=out_of_sample_period_length,
+                     estimation_window_length=estimation_window_length,
+                     out_path=return_data_path
+                     )
+

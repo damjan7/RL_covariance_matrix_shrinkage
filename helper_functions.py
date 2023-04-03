@@ -81,7 +81,7 @@ def get_p_largest_stocks_all_reb_dates(df, rebalancing_dates, p):
             permno_nums = get_p_largest_stocks(df, reb_date, reb_start, rebalancing_dates[idx+1], p)
             res.append([reb_date] + permno_nums)  # need reb_date as a list
 
-    res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, 101)])
+    res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, p+1)])
     res = res.set_index("rebalancing_date")
     return res
 
@@ -220,7 +220,7 @@ def demean_return_matrix(df):
 
 def calc_global_min_variance_pf(covmat_estimator):
     """
-    Calculates the global minimum portfolio WITHOUT SHORT SELLING CONSTRAINTS [??for demeaned covmats??]
+    Calculates the global minimum portfolio WITHOUT SHORT SELLING CONSTRAINTS
     :param covmat_estimator: covariance matrix estimator of shape p x p
     :return: portfolio weights
     """
@@ -228,7 +228,7 @@ def calc_global_min_variance_pf(covmat_estimator):
     inv_covmat = np.linalg.inv(covmat_estimator)
     w = inv_covmat @ vec_ones @ np.linalg.inv(vec_ones.T @ inv_covmat @ vec_ones)
     p = max(w.shape[0], w.shape[1])
-    return np.reshape(w, p)  # reshape to 1d array, doesn't np.ravel() also work instead?
+    return np.reshape(w, p)  # reshape to 1d array, doesn't np.ravel() also work instead? i.e. from (p,1) to (p)
 
 
 def get_full_rebalancing_dates_matrix(rebalancing_days):
@@ -251,9 +251,12 @@ def calc_monthly_return(return_matrix):
     """
     Given a return matrix for a month, return the monthly returns [needed to calculate weights at end of month]
     for every stock in the original matrix
+    Also works with return matrices for arbitrary time frames
+    DO NOT
     :param return_matrix:
     :return:
     """
+    print("WARNING I DONT THINK I SHOULD USE THIS ANYMORE!!!!!!!!!!!!!!!")
     res = return_matrix + 1  # add 1 to every return
     res = res.prod()
     return res
