@@ -22,6 +22,8 @@ class Policy(nn.Module):
         self.dropout2 = nn.Dropout(p=0.3)
         self.fc3 = nn.Linear(self.hidden, 2)
 
+        # these store the log probs of the sampled actions and the rewards of a given episode
+        # they are used for the calculation of the loss
         self.saved_log_probs = []
         self.rewards = []
 
@@ -40,6 +42,7 @@ def sample_action(state):
     '''
     Samples an action from our policy by creating a multinomial random variable with parameters given by
     our network (= probabilities)
+    Also calculates the log likelihood and saves it in the policy directly
     '''
     state = torch.from_numpy(state).float().unsqueeze(0)
     probs = policy.forward(state)
@@ -53,7 +56,6 @@ def sample_action(state):
 def finish_ep(gamma, eps):
     '''
     the actual training step at end of an epoch (after trajectory has been conducted)
-
     '''
     rew_to_go = 0
     policy_loss = []
@@ -84,14 +86,9 @@ optimizer = optim.Adam(policy.parameters(), lr=1e-2)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.95)
 
 
-#v1 = torch.Tensor([1,4,9,5]).view(1, 4)
-#policy.forward(v1)
-#print("done")
-
-
 def main():
     running_reward = 10
-    for i_episode in count(1):
+    for episode in count(1):
         state = env.reset()
         ep_reward = 0
         for t in range(1, 10000):  # Don't infinite loop while learning! Should never exceed 10'000 steps in cartpole
@@ -103,14 +100,13 @@ def main():
                 break
 
         running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-        finish_ep(gamma, eps)
-        if i_episode % 10 == 0:
-            print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-                  i_episode, ep_reward, running_reward))
+        finish_ep(gamma, eps)  # optimizes NN
+
+        if episode % 10 == 0:
+            print(f"Episode {episode}, Last Reward: {ep_reward}, Avg Reward (10 ep): {running_reward}")
             print(f"Current Learning Rate: {optimizer.param_groups[0]['lr']}")
         if running_reward > env.spec.reward_threshold:
-            print("Solved! Running reward is now {} and "
-                  "the last episode runs to {} time steps!".format(running_reward, t))
+            print(f"Good job! You solved the environmnet. The avg reward in the last 10 episodes is {running_reward}.")
             break
         scheduler.step()
 
