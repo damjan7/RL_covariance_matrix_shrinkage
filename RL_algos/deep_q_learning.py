@@ -11,6 +11,9 @@ from collections import deque
 
 
 class DQN(nn.Module):
+    '''
+    A Network to approximate the Q-function (= Q value for every state action pair)
+    '''
     def __init__(self, num_features, num_actions):
         super(DQN, self).__init__()
         self.state_space = num_features

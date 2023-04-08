@@ -78,7 +78,7 @@ def finish_ep(gamma, eps):
 # PARAMS
 gamma = 0.99  # discount factor
 seed = 8312
-eps = np.finfo(np.float32).eps.item()
+eps = np.finfo(np.float32).eps.item()  # added to denominator for numerical stability
 env = gym.make('CartPole-v1')
 num_features = env.observation_space.shape[0]
 policy = Policy(num_features)
