@@ -7,8 +7,9 @@ end_date = 20171231
 p = 100
 
 
-df, trading_days, rebalancing_days, start_date = hf.load_peprocess(path=path, end_date=end_date, out_of_sample_period_length=20,
-                                                       estimation_window_length=1)
+df, trading_days, rebalancing_days, start_date = hf.load_preprocess(path=path, end_date=end_date,
+                                                                    out_of_sample_period_length=20,
+                                                                    estimation_window_length=1)
 rebalancing_days_full = hf.get_full_rebalancing_dates_matrix(rebalancing_days)
 
 p_largest_stocks = hf.get_p_largest_stocks_all_reb_dates_V2(df, rebalancing_days_full, p)
@@ -29,7 +30,7 @@ for idx, reb in enumerate(rebalancing_days_full['actual_reb_day']):
 
 # now let us save these return matrices to memory so we can use them all the time
 # The wb indicates that the file is opened for WRITING in binary mode.
-path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
+path = r"/return_matrices"
 with open(rf"{path}\return_matrices_p100.pickle", 'wb') as pickle_file:
     pickle.dump(return_matrices, pickle_file)
 

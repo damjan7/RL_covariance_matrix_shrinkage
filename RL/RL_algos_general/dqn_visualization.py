@@ -1,6 +1,11 @@
 ### TEST MY NN on the env with visualization
+import glob
+import io
+import base64
+import ipythondisplay
+import gym
+import torch
 
-"""
 def show_video():
   '''Enables video recording of gym environment and shows it.'''
   mp4list = glob.glob('video/*.mp4')
@@ -34,10 +39,3 @@ while not done:
 print('Return on this episode: {}'.format(ep_rew))
 env.close()
 show_video()
-"""
-
-
-
-
-
-

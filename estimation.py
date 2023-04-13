@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-import helper_functions as hf
+from preprocessing_scripts import helper_functions as hf
 import pickle
-import parameters
 
 
 class CovMatEstimation:
@@ -42,7 +41,6 @@ class CovMatEstimation:
 
     def calc_pf_weights_and_returns(self):
         """
-
         Calculates PF weights, covariance matrix estimates, monthly portfolio returns (using the calculated weights)
         Returns all these, and the "used" stocks (i.e., the permno numbers of the stocks)
         :return: Lists or pandas dataframes containing the above
@@ -59,6 +57,7 @@ class CovMatEstimation:
 
         estimator = self.estimator
 
+        # attention, past return matrices may already be de-meaned!
         for idx in range(self.rebalancing_days_full.shape[0]):  # iterate through all rebalancing days
             permno.append(self.past_return_matrices[idx].columns)  # p largest stocks we consider
             est = estimator(self.past_return_matrices[idx])  # calculate the covariance matrix estimator
@@ -114,6 +113,8 @@ class CovMatEstimation:
             # for the monthly return data, I need the look 21 days in the future
             # note that the date list at the current index contains the returns for the past year
             # this was used to calculate the covariance matrices and determine the weights of the PF for the next 21 days
+
+            # this is not the way I use it anymore!
             monthly_portfolio_returns.append(
                 hf.calc_monthly_return(self.future_return_matrices[idx]).values)  # values only
             monthly_portfolio_returns_with_permno.append(hf.calc_monthly_return(self.future_return_matrices[idx]))

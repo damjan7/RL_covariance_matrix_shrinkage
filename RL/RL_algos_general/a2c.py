@@ -40,6 +40,7 @@ def train():
         ep_log_probs = []
         ep_rewards = []
         ep_state_values = []
+        entropy = []
         running_reward = [10 for _ in range(10)]
         for frame in count(1):  # will break out once done = True
             # For Loss Calculation: get action, state value (critic), and log probs of action under policy
@@ -47,6 +48,7 @@ def train():
             action_probs, state_value = net.forward(state)
             ep_state_values.append(state_value.squeeze(dim=0))  # append state values
             multinom_var = Categorical(action_probs)
+            entropy.append(multinom_var.entropy())
             action = multinom_var.sample()
             log_prob = multinom_var.log_prob(action)
             ep_log_probs.append(log_prob)
@@ -73,11 +75,10 @@ def train():
         ep_state_values = torch.cat(ep_state_values)
         ep_log_probs = torch.cat(ep_log_probs)
 
-
         advantage = disc_rewards - ep_state_values
         policy_loss = -(ep_log_probs*advantage).mean()
         value_loss = 0.5 * (advantage.pow(2)).mean()
-        loss = policy_loss + value_loss  # - entropy regularizer, Not here yet
+        loss = policy_loss + value_loss  # - eps * torch.stack(entropy).mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -98,6 +99,8 @@ num_episodes = 3000
 
 optimizer = optim.Adam(net.parameters(), lr=lr)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.95)
+
+eps = 1e-3
 
 train()
 

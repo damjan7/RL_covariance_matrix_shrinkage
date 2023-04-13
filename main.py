@@ -1,12 +1,11 @@
-import numpy as np
 import pandas as pd
 
-import helper_functions as hf
 from estimation import CovMatEstimation
-import parameters
 from parameters import params
 
 end_date = 20171231
+# when changing estimation window length OR out of sample period
+# need to re-run 'create_save_return_matrix.py' to get new return matrices
 estimation_window_length = 1
 out_of_sample_period_length = 20
 pf_size = 500  # [30, 50, 100, 225, 500]
@@ -31,7 +30,7 @@ model3 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_peri
                           raw_data_path, return_data_path, result_data_path)
 
 model4 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_period_length, pf_size,
-                          params["estimator"]["cov_cor"],
+                          params["estimator"]["GIS"],
                           raw_data_path, return_data_path, result_data_path)
 
 model5 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_period_length, pf_size,
@@ -41,11 +40,11 @@ model5 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_peri
 equal_weighted_res = model5.calc_equal_weighted_pf()
 
 res_dict = {
-    "Model 1": [model1.total_portfolio_return_V2, model1.total_pf_std_daily],
-    "Model 2": [model2.total_portfolio_return_V2, model2.total_pf_std_daily],
-    "Model 3": [model3.total_portfolio_return_V2, model3.total_pf_std_daily],
-    "Model 4": [model4.total_portfolio_return_V2, model4.total_pf_std_daily],
-    "Model 5": [model5.total_portfolio_return_V2, model5.total_pf_std_daily],
+    "Model 1 (Cov1Para)": [model1.total_portfolio_return_V2, model1.total_pf_std_daily],
+    "Model 2 (Cov2Para)": [model2.total_portfolio_return_V2, model2.total_pf_std_daily],
+    "Model 3 (CovDiag)": [model3.total_portfolio_return_V2, model3.total_pf_std_daily],
+    "Model 4 (GIS)": [model4.total_portfolio_return_V2, model4.total_pf_std_daily],
+    "Model 5 (sample)": [model5.total_portfolio_return_V2, model5.total_pf_std_daily],
     "Model 1/N": [equal_weighted_res[5], equal_weighted_res[6]],
 }
 

@@ -3,6 +3,7 @@ import pandas as pd
 
 def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, rebalancing_date_plus_one,  p):
     """
+    THE FUNCTION IS CURRENTLY WRITTEN FOR ESTIMATION WINDOW LENGTH = 252 DAYS!!!!!!
     This function returns the p largest stocks for some given rebalancing date.
     It should also include a filter for stocks that lack observations for the most recent 252 trading days.
     Something like at most 5% NaN values among the last 252 trading days should be appropriate.
@@ -108,7 +109,7 @@ def get_p_largest_stocks_all_reb_dates_V2(df, rebalancing_dates, p):
         res.append([reb_date] + permno_nums)
 
 
-    res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, 101)])
+    res = pd.DataFrame(res, columns = ['rebalancing_date'] + ["stock " + str(i) for i in range(1, p+1)])
     res = res.set_index("rebalancing_date")
     return res
 
@@ -125,7 +126,7 @@ def filter_years(df, start_date, end_date):
     df2 = df[(start_date <= df['date']) & (df['date'] <= end_date)]
     return df2
 
-def load_peprocess(path, end_date, out_of_sample_period_length, estimation_window_length):
+def load_preprocess(path, end_date, out_of_sample_period_length, estimation_window_length):
     """
     Loads data
     Applies necessary preprocessing steps before working with the data.
@@ -150,23 +151,28 @@ def load_peprocess(path, end_date, out_of_sample_period_length, estimation_windo
     data = data[data['date'] <= end_date]
 
     trading_dates = sorted(data['date'].unique(), reverse=True)
-    start_date = trading_dates[12*21*(out_of_sample_period_length + estimation_window_length)-1]
-    actual_trading_dates = trading_dates[0: 12*21*(out_of_sample_period_length + estimation_window_length)]
-    idx = [i for i in range(len(actual_trading_dates)) if i % 21 == 0]
+    start_date = trading_dates[-1]
+
+    tmp = len(trading_dates)
+    # find closest number (< tmp) that is divisible by 21 [i.e. we have a full month]
+    m = int(tmp / 21) * 21
+
+    actual_trading_dates = trading_dates[0: m]
+    # idx = [i for i in range(len(actual_trading_dates)) if i % 21 == 0]
 
     # this contains also the 12 "rebalancing" dates before the actual first rebalancing date
 
-    rebalancing_dates_plus = sorted([actual_trading_dates[i] for i in idx])
+    rebalancing_dates_plus = sorted(actual_trading_dates)  # RL training case
 
     # sort actual trading dates in correct order
     actual_trading_dates = sorted(actual_trading_dates)
 
 
     # some small assertions to check whether code works as intended
-    assert actual_trading_dates[-1] == rebalancing_dates_plus[-1]
+    #assert actual_trading_dates[-1] == rebalancing_dates_plus[-1]
     # is the number rebalancing dates equal to the number of considered "trading" months
-    assert len(rebalancing_dates_plus) == 12 * (estimation_window_length + out_of_sample_period_length)
-    assert len(actual_trading_dates) == 12 * 21 * (estimation_window_length + out_of_sample_period_length)
+    #assert len(rebalancing_dates_plus) == 12 * (estimation_window_length + out_of_sample_period_length)
+    #assert len(actual_trading_dates) == 12 * 21 * (estimation_window_length + out_of_sample_period_length)
 
     data = data[start_date <= data['date']]
 
@@ -231,18 +237,23 @@ def calc_global_min_variance_pf(covmat_estimator):
     return np.reshape(w, p)  # reshape to 1d array, doesn't np.ravel() also work instead? i.e. from (p,1) to (p)
 
 
-def get_full_rebalancing_dates_matrix(rebalancing_days):
+def get_full_rebalancing_dates_matrix(rebalancing_days, estimation_window_length):
     """
     Given the rebalancing dates, return the full rebalancing dates matrix containing the current rebalancing date,
     the rebalancing date 12 months before, and the rebalancing date 1 month in the future
+    BUT FOR THE RL DATA EVERY DATE IS A REBALANCING DATE, HENCE THE PREV DAY IS JUST 1 DAY BEFORE AND THE FUT DAY
+    IS JUST 1 DAY LATER! NOT TRUE, I need these rebalancing dates as such tuo know when the
+    future return period is and the past return period for the covmats!
     :param rebalancing_dates:
     :return: full rebalancing days matrix
     """
 
+    # ACTUALLY NEED TO DO 12*21 instead of just 12!! as now every trading day is a rebalancing day
+    # before, 12 made sense!
     rebalancing_days_full = {
-    "actual_reb_day" : rebalancing_days[12:len(rebalancing_days)-1],
-    "prev_reb_day" : rebalancing_days[0:len(rebalancing_days)-13],
-    "fut_reb_day" : rebalancing_days[13:len(rebalancing_days)]
+    "actual_reb_day" : rebalancing_days[12*21:-1*21],
+    "prev_reb_day" : rebalancing_days[:-13*21],
+    "fut_reb_day" : rebalancing_days[13*21:]
     }
     rebalancing_days_full = pd.DataFrame(rebalancing_days_full)
     return rebalancing_days_full
@@ -256,7 +267,7 @@ def calc_monthly_return(return_matrix):
     :param return_matrix:
     :return:
     """
-    print("WARNING I DONT THINK I SHOULD USE THIS ANYMORE!!!!!!!!!!!!!!!")
+    #print("WARNING I DONT THINK I SHOULD USE THIS ANYMORE!!!!!!!!!!!!!!!") WHYYYYYYYYYYYYYYYYYYY
     res = return_matrix + 1  # add 1 to every return
     res = res.prod()
     return res

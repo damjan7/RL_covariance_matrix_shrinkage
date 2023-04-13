@@ -3,7 +3,7 @@ import pickle
 import pandas as pd
 import numpy as np
 
-import helper_functions as hf
+from preprocessing_scripts import helper_functions as hf
 from covariance_estimators import cov1Para
 
 base_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"

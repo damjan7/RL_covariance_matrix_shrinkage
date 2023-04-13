@@ -8,6 +8,7 @@ covariance_matrix_estimators = {
     "cov2para": estimators_testing.cov2Para,
     "cov_diag": estimators_testing.covDiag,
     "cov_cor": estimators_testing.covCor,
+    "GIS": estimators_testing.GIS,
 
 }
 

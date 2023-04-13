@@ -67,7 +67,7 @@ class ReplayBuffer:
         self.device = device
 
     def add(self, state, action, rew, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+        self.buffer.append((state, action, rew, next_state, done))
 
     def __len__(self):
         return len(self.buffer)
