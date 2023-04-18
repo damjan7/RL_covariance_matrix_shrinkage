@@ -49,6 +49,9 @@ class MyCustomEnv(gym.Env):
         # or just my weights?
         self.observation_space = spaces.Box(low=-1000, high=1000, shape=
                         (100, 100), dtype=np.float64)  # let's do shape = 100,100 at first, i.e. 100 stocks
+        # thats correct, but we don't actually have 100x100 params when looking at the covmat
+        # rather we have n*(n+1)/2 free params
+        self.observation_space = spaces.Box(low=-100, high=100, shape = (100*101/2), dtype=np.float64)
 
         # self.start_date = start_date
         # self.end_date = end_date
@@ -86,6 +89,7 @@ class MyCustomEnv(gym.Env):
         # Execute one time step within the environment
         # any step doesn't change anything in the environment, it just changes the reward we get!
         # of course we need to store all the daily returns to calculate the average over the whole time frame
+
         '''
         The step method usually contains most of the logic of your environment.
         It accepts an action, computes the state of the environment after applying that action and
@@ -93,7 +97,7 @@ class MyCustomEnv(gym.Env):
         Once the new state of the environment has been computed,
         we can check whether it is a terminal state, and we set done accordingly.
         :param action: the shrinkage inensitiy
-        :return: new state, reward, and done = True
+        :return: next_state, reward, done, info [when calling env.step(action)]
         '''
         # i.e. takes an action --> shrinkage inensity
         # calculate cov mat estimator and future rewards, say for the next 21 days as done before
@@ -116,7 +120,7 @@ class MyCustomEnv(gym.Env):
         pf_var = weights.T @ fut_covmat @ weights
         # as we naturally maximize reward, our reward is the negative pf_variance
         # i hope this makes sense
-        reward = -pf_var
+        reward = - pf_var
 
         tmp_daily_returns_weighted = fut_ret @ weights
         self.daily_returns_weighted.append(tmp_daily_returns_weighted)
@@ -124,7 +128,7 @@ class MyCustomEnv(gym.Env):
 
         # go one rebalancing date further
         self.state += 1  # our state is just the row-INDEX of the rebalancing_days dataframe
-        if self.state >= self.rebalancing_days_full.shape[0]:
+        if self.state >= self.rebalancing_days_full.shape[0]-1:  # since we start at zero
             self.done = True  # we reached the end of the dataset
 
         observation = np.ones((100, 100))
@@ -154,7 +158,7 @@ class MyCustomEnv(gym.Env):
         self.weights = []
         self.done = False
 
-        return np.ones((100, 100))  # just random
+        return np.ones((100, 100))  # just random [state/observation]
 
     def render(self, mode='human', close=False):
         pass
@@ -172,7 +176,7 @@ daily_returns_all_episodes = []
 
 
 
-from RL.RL_algos_general.DQN_custom import main
+from RL.RL_algos_general.DQN_custom import  main
 
 main(env)
 
