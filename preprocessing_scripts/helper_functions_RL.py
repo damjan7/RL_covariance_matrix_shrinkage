@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+import covariance_estimators, estimators_testing
+
 def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, rebalancing_date_plus_one,  p):
     """
     THE FUNCTION IS CURRENTLY WRITTEN FOR ESTIMATION WINDOW LENGTH = 252 DAYS!!!!!!
@@ -284,4 +286,12 @@ def calc_weight_changes(weight_matrix):  # DO I ACTUALLY NEED THIS? I MEAN I CAN
     """
     pass
 
+
+def get_weights(shrinkage_inensity, shrinkage_target):
+    '''
+    Given shrinkage intensity and a shrinkage target, calculate the weights of the stocks
+    '''
+
+
+    return weights
 
