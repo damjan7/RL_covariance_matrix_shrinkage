@@ -70,6 +70,9 @@ class CovMatEstimation:
                 hf.calc_monthly_return(self.future_return_matrices[idx]).values)  # values only
             monthly_portfolio_returns_with_permno.append(hf.calc_monthly_return(self.future_return_matrices[idx]))
 
+            # this is the way gianluca implements it and I should use this as well
+            # weighted daily returns [i] has the n daily returns for the pf made on rebalancing date i
+            # need to average and annualize all these
             weighted_daily_returns += list(self.future_return_matrices[idx] @ weights[idx])
             daily_dates += list(self.future_return_matrices[idx].index)
 

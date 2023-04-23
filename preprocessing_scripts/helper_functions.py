@@ -256,7 +256,8 @@ def calc_monthly_return(return_matrix):
     :param return_matrix:
     :return:
     """
-    print("WARNING I DONT THINK I SHOULD USE THIS ANYMORE!!!!!!!!!!!!!!! \n AS GIANLUCA UND SO CALC IT ANOTHER WAY!")
+    #print("WARNING I DONT THINK I SHOULD USE THIS ANYMORE!!!!!!!!!!!!!!! \n AS GIANLUCA UND SO CALC IT ANOTHER WAY!")
+    # TODO: DO I NEED TO CHANGE THIS
 
     res = return_matrix + 1  # add 1 to every return
     res = res.prod()
@@ -276,7 +277,7 @@ def calc_weight_changes(weight_matrix):  # DO I ACTUALLY NEED THIS? I MEAN I CAN
 
 
 
- def calc_pf_weights_returns_vars(estimator, reb_days, past_return_mat, fut_return_mat):
+def calc_pf_weights_returns_vars(estimator, reb_days, past_return_mat, fut_return_mat):
     """
     Calculates PF weights, covariance matrix estimates, monthly portfolio returns (using the calculated weights)
     Returns all these, and the "used" stocks (i.e., the permno numbers of the stocks)
@@ -292,14 +293,13 @@ def calc_weight_changes(weight_matrix):  # DO I ACTUALLY NEED THIS? I MEAN I CAN
     weighted_daily_returns = []
     daily_dates = []
 
-    estimator = estimator
 
     permno = past_return_mat.columns
-    covmat_estimate = estimator(past_return_mat)
+    covmat_estimate = estimator
     weights = calc_global_min_variance_pf(covmat_estimate)
-    monthly_pf_return = calc_monthly_return(fut_return_mat).values
-    weighted_daily_returns = fut_return_mat @ weights
-    daily_dates = fut_return_mat.index
+    # monthly_pf_return = calc_monthly_return(fut_return_mat).values  # that would be "my way"
+    # daily_dates = fut_return_mat.index
+    weighted_daily_returns = fut_return_mat @ weights   # returns n returns, --> average and annualize them
 
     # total return using method of gianluca in his paper
     total_portfolio_return_daily = np.mean(weighted_daily_returns) * 252
@@ -310,7 +310,7 @@ def calc_weight_changes(weight_matrix):  # DO I ACTUALLY NEED THIS? I MEAN I CAN
     monthly_portfolio_returns = pd.DataFrame(monthly_portfolio_returns,
      index=rebalancing_days_full['actual_reb_day'])
     monthly_portfolio_returns_with_permno = pd.DataFrame(monthly_portfolio_returns_with_permno,
-         index=rebalancing_days_full['actual_reb_day'])
+     index=rebalancing_days_full['actual_reb_day'])
     permno = pd.DataFrame(permno, index=rebalancing_days_full['actual_reb_day']
     '''
 
