@@ -24,7 +24,8 @@ def create_covmats(past_return_data_path, num_stocks, shrinkage_method: str="Non
     --> SHOULD IT ALSO CALCULATE THE TARGET MATRIX AS IT HAS TO BE CALCULATED OVER AND OVER AGAIN OTHERWISE
     AND THIS MAKES THE WHOLE CODE SLOW
 
-    input: past return data as a list, i.e. for every index of the list we need a covariance matrix
+    :inputs : past return data as a list, i.e. for every index of the list we need a covariance matrix
+    :return : returns a dictionary containing 4 lists of values, see below
     """
 
     covariance_matrix_estimators = {
@@ -40,19 +41,37 @@ def create_covmats(past_return_data_path, num_stocks, shrinkage_method: str="Non
     upper_triu_sample_covmats = []
     corr_mats = []
 
-    past_return_data = #pickle..
+    # The rb indicates that the file is opened for READING in binary mode.
+    with open(rf"{past_return_data_path}\past_return_matrices_p30.pickle", 'rb') as f:
+        past_return_data = pickle.load(f)
 
     for elem in past_return_data:
         sample, target = estimator(elem)
         triu_indices = torch.triu_indices(num_stocks, num_stocks, offset=0)
         # append all matrices
-        sample_covmats.append(sample)
+        sample_covmats.append(sample.values)
         targets.append(target)
-        upper_triu_sample_covmats.append(sample[triu_indices[0], triu_indices[1]])
-        corr_mats.append(normalize_covmat(sample))
+        upper_triu_sample_covmats.append(sample.values[triu_indices[0], triu_indices[1]])
+        corr_mats.append(normalize_covmat(sample.values))
 
     # save all to the out_path
     out_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL\covariance_matrices"
+    out = {
+        "sample_covmats": sample_covmats,
+        "targets": targets,
+        "upper_triu_sample_covmats": upper_triu_sample_covmats,
+        "sample_corr_mats": corr_mats
+    }
+
+    with open(rf"{out_path}\covariance_correlation_data_p{num_stocks}.pickle", 'wb') as pickle_file:
+        pickle.dump(out, pickle_file)
+
+
+create_covmats(
+    past_return_data_path=r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL",
+    num_stocks=30,
+    shrinkage_method="cov1para"
+)
 
 
 
