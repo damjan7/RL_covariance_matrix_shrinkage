@@ -29,7 +29,6 @@ print("loaded necessary data")
 
 
 
-
 '''
 Given a covariance matrix and a shrinkage target
 '''
@@ -137,8 +136,8 @@ def train_loop_v3():
             for i in range(batch_size):
                 res1, res2 = calculate_pf_return_std(
                     shrinkage_intensities[i].item(),
-                    sample_target_lst[0][1],
-                    sample_target_lst[0][0],
+                    sample_target_lst[i][1],
+                    sample_target_lst[i][0],
                     rebalancing_days_full.iloc[i, ],
                     past_ret_matrices[i],
                     fut_ret_matrices[i]
