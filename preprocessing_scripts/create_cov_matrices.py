@@ -40,6 +40,7 @@ def create_covmats(past_return_data_path, num_stocks, shrinkage_method: str="Non
     sample_covmats, targets = [], []
     upper_triu_sample_covmats = []
     corr_mats = []
+    upper_triu_sample_corrmats = []
 
     # The rb indicates that the file is opened for READING in binary mode.
     with open(rf"{past_return_data_path}\past_return_matrices_p30.pickle", 'rb') as f:
@@ -51,8 +52,10 @@ def create_covmats(past_return_data_path, num_stocks, shrinkage_method: str="Non
         # append all matrices
         sample_covmats.append(sample.values)
         targets.append(target)
+        sample_corrmat = normalize_covmat(sample.values)
         upper_triu_sample_covmats.append(sample.values[triu_indices[0], triu_indices[1]])
-        corr_mats.append(normalize_covmat(sample.values))
+        corr_mats.append(sample_corrmat)
+        upper_triu_sample_corrmats.append(sample_corrmat[triu_indices[0], triu_indices[1]])
 
     # save all to the out_path
     out_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL\covariance_matrices"
@@ -60,10 +63,11 @@ def create_covmats(past_return_data_path, num_stocks, shrinkage_method: str="Non
         "sample_covmats": sample_covmats,
         "targets": targets,
         "upper_triu_sample_covmats": upper_triu_sample_covmats,
-        "sample_corr_mats": corr_mats
+        "sample_corr_mats": corr_mats,
+        "upper_triu_sample_corrmats": upper_triu_sample_corrmats
     }
 
-    with open(rf"{out_path}\covariance_correlation_data_p{num_stocks}.pickle", 'wb') as pickle_file:
+    with open(rf"{out_path}\covariance_correlation_data_p{num_stocks}_{shrinkage_method}.pickle", 'wb') as pickle_file:
         pickle.dump(out, pickle_file)
 
 
