@@ -19,7 +19,7 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.state_space = num_features
         self.action_space = num_actions
-        self.hidden = 100
+        self.hidden = self.state_space * 2
         self.l1 = nn.Linear(self.state_space, self.hidden, bias=True)
         self.l2 = nn.Linear(self.hidden, self.hidden, bias=True)
         self.l3 = nn.Linear(self.hidden, self.action_space, bias=True)  # output Q for every possible action

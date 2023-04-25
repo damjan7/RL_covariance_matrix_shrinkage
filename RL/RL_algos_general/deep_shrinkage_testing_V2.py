@@ -234,14 +234,102 @@ def train_loop_batch_TENSORTEST():
         if (epoch+1) % 10 == 0:
             print(f"running epoch loss (epoch{epoch-8} - {epoch+1}):", np.mean(running_ep_loss))
 
+############################
+
+
+class NetDiag(nn.Module):
+    '''
+    A Network to approximate the Q-function (= Q value for every state action pair)
+    '''
+
+    def __init__(self, num_stocks):
+        super(NetDiag, self).__init__()
+        self.state_space = num_stocks
+
+        hid1 = num_stocks*3
+        hid2 = int(hid1 / 2)
+        hid3 = int(hid2 / 6)
+        self.l1 = nn.Linear(self.state_space, int(num_stocks/2), bias=True)
+        self.l2 = nn.Linear(num_stocks, num_stocks, bias=True)
+        self.l3 = nn.Linear(int(num_stocks/2), 1, bias=True)
+        #self.l4 = nn.Linear(hid3, 1, bias=True)  # output Q for every possible action
+
+
+    def forward(self, x):
+        x = self.l1(x)
+        #x = F.leaky_relu(self.l2(x))
+        #x = F.leaky_relu(self.l3(x))
+        x = self.l3(x)
+        x = F.tanh(x)
+        return x
+
+def train_loop_batch_DIAGONAL():
+    '''
+    This train loop implements "batched" training on its own by always sampling indices of batch size
+    instead of single indices
+    '''
+    running_ep_loss = [1 for _ in range(10)]
+    for epoch in range(numepochs):
+        epoch_loss = 0
+
+        batch_size = 64
+        all_indices = np.random.choice(len(past_ret_matrices), (int(len(past_ret_matrices) / batch_size), batch_size))
+        for batch_indices in all_indices:
+
+            X = torch.stack([torch.Tensor(np.diag(sample_covmats[i])) for i in batch_indices])
+            shrinkage_intensities = model.forward(X)  # returns the shrinkage intensities, according to them, calc the weights and the return
+
+            pf_return_daily, pf_std_daily = [], []  # shrinkage_intensitiy, target, sample, reb_days, pas_ret_mat, fut_ret_mat
+
+
+            for i in range(batch_size):
+                res1, res2 = calculate_pf_return_std(
+                    shrinkage_intensitiy=shrinkage_intensities[i].item(),
+                    target=targets[batch_indices[i]],
+                    sample=sample_covmats[batch_indices[i]],
+                    reb_days=None,  # this is not needed
+                    pas_ret_mat=past_ret_matrices[batch_indices[i]],
+                    fut_ret_mat=fut_ret_matrices[batch_indices[i]]
+                )
+                pf_return_daily.append(res1)
+                pf_std_daily.append(res2)
+
+            pf_std_daily = torch.tensor(pf_std_daily, requires_grad=True)
+            epoch_loss += pf_std_daily.sum().item()
+
+
+            # need to minimize pf_std_daily so this is already my loss and i can backpropagate it
+            optimizer.zero_grad()
+            pf_std_daily.sum().backward()
+            optimizer.step()
+
+        running_ep_loss.pop()
+        running_ep_loss.insert(0, epoch_loss)
+
+        if (epoch+1) % 10 == 0:
+            print(f"running epoch loss (epochs {epoch-8}-{epoch+1}):", np.mean(running_ep_loss))
+            print("shrinkage intensities:", shrinkage_intensities)
+
+
+
 # init params
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = Net2(num_stocks=30).to(device)
-lr = 0.001
-optimizer = optim.Adam(model.parameters(), lr=lr)
+lr = 100
+optimizer = optim.SGD(model.parameters(), lr=lr)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
-numepochs = 100
+numepochs = 1000
 
-train_loop_batch()
+# TESTING of only passing DIAGONAL elems of covmat to net
+model = NetDiag(num_stocks=30).to(device)
+'''
+for name, param in model.named_parameters():
+    if name.startswith('l'):
+        param.data = torch.Tensor(np.random.normal(0, 2, param.shape))
+'''
+optimizer = optim.SGD(model.parameters(), lr=lr)
+
+train_loop_batch_DIAGONAL()
+#train_loop_batch()
 #train_loop()
 #train_loop_batch_TENSORTEST()
