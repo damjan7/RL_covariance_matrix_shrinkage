@@ -8,8 +8,8 @@ def normalize_covmat(covmat):
     Given covariance matrix, normalizes it (= correlation matrix)
     """
     corrmat = np.zeros(covmat.shape)
-    for i in range(covmat.shape[0] - 1):
-        for j in range(i, covmat.shape[0] - 1):
+    for i in range(covmat.shape[0]):
+        for j in range(i, covmat.shape[0]):
             corrmat[i, j] = corrmat[j, i] = covmat[i, j] / (np.sqrt(covmat[i, i]) * np.sqrt(covmat[j, j]))
     return corrmat
 

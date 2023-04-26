@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 
 def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, rebalancing_date_plus_one,  p):
     """
@@ -321,3 +322,50 @@ def calc_pf_weights_returns_vars(estimator, reb_days, past_return_mat, fut_retur
 
 
 
+def calc_pf_weights_returns_vars_TENSOR(estimator, reb_days, past_return_mat, fut_return_mat):
+    """
+    Calculates PF weights, covariance matrix estimates, monthly portfolio returns (using the calculated weights)
+    Returns all these, and the "used" stocks (i.e., the permno numbers of the stocks)
+    :return: Lists or pandas dataframes containing the above
+    """
+    # at the same time, we will use the covariance matrix to calculate the weights
+    covmat_estimates = []
+    weights = []
+    permno = []
+    monthly_portfolio_returns = []
+    monthly_portfolio_returns_with_permno = []
+
+    weighted_daily_returns = []
+    daily_dates = []
+
+
+    permno = past_return_mat.columns
+    covmat_estimate = estimator
+    #weights = calc_global_min_variance_pf(covmat_estimate)
+
+
+    # calculate global min var PF here instead of calling it, to do it with tensors
+    vec_ones = torch.ones((covmat_estimate.shape[0], 1))
+    inv_covmat = torch.inverse(covmat_estimate)
+    w = inv_covmat @ vec_ones @ torch.inverse(vec_ones.T @ inv_covmat @ vec_ones)
+    p = max(w.shape[0], w.shape[1])
+    # maybe need to reshape w
+
+    # monthly_pf_return = calc_monthly_return(fut_return_mat).values  # that would be "my way"
+    # daily_dates = fut_return_mat.index
+    weighted_daily_returns = torch.Tensor(fut_return_mat.values) @ w   # returns n returns, --> average and annualize them
+
+    # total return using method of gianluca in his paper
+    total_portfolio_return_daily = weighted_daily_returns.mean() * 252
+    total_pf_std_daily = weighted_daily_returns.std() * torch.sqrt(torch.tensor(252))
+
+    '''
+    weights = pd.DataFrame(weights, index=rebalancing_days_full['actual_reb_day'])
+    monthly_portfolio_returns = pd.DataFrame(monthly_portfolio_returns,
+     index=rebalancing_days_full['actual_reb_day'])
+    monthly_portfolio_returns_with_permno = pd.DataFrame(monthly_portfolio_returns_with_permno,
+     index=rebalancing_days_full['actual_reb_day'])
+    permno = pd.DataFrame(permno, index=rebalancing_days_full['actual_reb_day']
+    '''
+
+    return total_portfolio_return_daily, total_pf_std_daily

@@ -69,23 +69,23 @@ class Net2(nn.Module):
 
     def __init__(self, num_stocks):
         super(Net2, self).__init__()
-        self.inp_dim = int(num_stocks * (num_stocks+1) / 2)
-        v1 = self.inp_dim * 3
+        v0 = int(num_stocks * (num_stocks+1) / 2)
+        v1 = v0 * 3
         v2 = int(v1/2)
         v3 = int(v2/2)
         v4 = int(v3/2)
 
-        self.l1 = nn.Linear(self.inp_dim, v1, bias=True)
-        self.l2 = nn.Linear(v1, v2, bias=True)
+        self.l1 = nn.Linear(v0, v0, bias=True)
+        self.l2 = nn.Linear(v0, v0, bias=True)
         self.l3 = nn.Linear(v2, v3, bias=True)
         self.l4 = nn.Linear(v3, v4, bias=True)
-        self.l5 = nn.Linear(v4, 1, bias=True)  # output Q for every possible action
+        self.l5 = nn.Linear(v0, 1, bias=True)  # output Q for every possible action
 
     def forward(self, x):
         x = F.leaky_relu(self.l1(x))
-        x = self.l2(x)
-        x = F.leaky_relu(self.l3(x))
-        x = F.leaky_relu(self.l4(x))
+        #x = F.leaky_relu(self.l2(x))
+        #x = F.leaky_relu(self.l3(x))
+        #x = F.leaky_relu(self.l4(x))
         x = self.l5(x)
         x = F.sigmoid(x)
         return x
@@ -187,7 +187,7 @@ def train_loop():
 #### WORK WITH TENSORS INSTEAD
 def calculate_pf_return_std_TENSORTEST(shrinkage_intensitiy, target, sample, reb_days, pas_ret_mat, fut_ret_mat):
     estimator = shrinkage_intensitiy * target + (1-shrinkage_intensitiy) * sample
-    pf_return_daily, pf_std_daily = hf.calc_pf_weights_returns_vars(estimator, reb_days, pas_ret_mat, fut_ret_mat)
+    pf_return_daily, pf_std_daily = hf.calc_pf_weights_returns_vars_TENSOR(estimator, reb_days, pas_ret_mat, fut_ret_mat)
     return pf_return_daily, pf_std_daily
 
 def train_loop_batch_TENSORTEST():
@@ -195,6 +195,7 @@ def train_loop_batch_TENSORTEST():
     This train loop implements "batched" training on its own by always sampling indices of batch size
     instead of single indices
     '''
+
     running_ep_loss = [1 for _ in range(10)]
     for epoch in range(numepochs):
         epoch_loss = 0
@@ -203,7 +204,8 @@ def train_loop_batch_TENSORTEST():
         all_indices = np.random.choice(len(past_ret_matrices), (int(len(past_ret_matrices) / batch_size), batch_size))
         for batch_indices in all_indices:
 
-            X = torch.stack([torch.Tensor(upper_triu_sample_covmats[i]) for i in batch_indices])
+            X = torch.stack([upper_triu_sample_covmats[batch_idx] * 10 ** 4 for batch_idx in batch_indices])
+            #X = torch.stack([upper_triu_sample_corrmats[i] * 10 for i in batch_indices])
             shrinkage_intensities = model.forward(X)  # returns the shrinkage intensities, according to them, calc the weights and the return
 
             pf_return_daily, pf_std_daily = [], []  # shrinkage_intensitiy, target, sample, reb_days, pas_ret_mat, fut_ret_mat
@@ -219,8 +221,8 @@ def train_loop_batch_TENSORTEST():
                 pf_return_daily.append(res1)
                 pf_std_daily.append(res2)
 
-            pf_std_daily = torch.tensor(pf_std_daily, requires_grad=True)
-
+            pf_std_daily = torch.stack(pf_std_daily)
+            pf_return_daily = torch.stack(pf_return_daily)
             epoch_loss += pf_std_daily.sum()
 
             # need to minimize pf_std_daily so this is already my loss and i can backpropagate it
@@ -232,7 +234,8 @@ def train_loop_batch_TENSORTEST():
         running_ep_loss.insert(0, epoch_loss.item())
 
         if (epoch+1) % 10 == 0:
-            print(f"running epoch loss (epoch{epoch-8} - {epoch+1}):", np.mean(running_ep_loss))
+            print(f"running epoch loss from the last 10 epochs ({epoch-8}-{epoch+1}):", np.mean(running_ep_loss))
+            print(f"current shrinkage intensities: ", shrinkage_intensities.reshape((1, batch_size)))
 
 ############################
 
@@ -250,14 +253,14 @@ class NetDiag(nn.Module):
         hid2 = int(hid1 / 2)
         hid3 = int(hid2 / 6)
         self.l1 = nn.Linear(self.state_space, int(num_stocks/2), bias=True)
-        self.l2 = nn.Linear(num_stocks, num_stocks, bias=True)
+        self.l2 = nn.Linear(int(num_stocks/2), int(num_stocks/2), bias=True)
         self.l3 = nn.Linear(int(num_stocks/2), 1, bias=True)
         #self.l4 = nn.Linear(hid3, 1, bias=True)  # output Q for every possible action
 
 
     def forward(self, x):
-        x = self.l1(x)
-        #x = F.leaky_relu(self.l2(x))
+        x = F.leaky_relu(self.l1(x))
+        x = F.leaky_relu(self.l2(x))
         #x = F.leaky_relu(self.l3(x))
         x = self.l3(x)
         x = F.tanh(x)
@@ -315,21 +318,29 @@ def train_loop_batch_DIAGONAL():
 # init params
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = Net2(num_stocks=30).to(device)
-lr = 100
+lr = 1e-4
 optimizer = optim.SGD(model.parameters(), lr=lr)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
 numepochs = 1000
 
 # TESTING of only passing DIAGONAL elems of covmat to net
-model = NetDiag(num_stocks=30).to(device)
+#model = NetDiag(num_stocks=30).to(device)
 '''
 for name, param in model.named_parameters():
     if name.startswith('l'):
         param.data = torch.Tensor(np.random.normal(0, 2, param.shape))
 '''
-optimizer = optim.SGD(model.parameters(), lr=lr)
+optimizer = optim.Adam(model.parameters(), lr=lr)
 
-train_loop_batch_DIAGONAL()
+#train_loop_batch_DIAGONAL()
 #train_loop_batch()
 #train_loop()
-#train_loop_batch_TENSORTEST()
+
+# for tensortest need tensors for all data:
+sample_covmats = torch.Tensor(np.array(covmats_dict["sample_covmats"]))
+targets = torch.Tensor(np.array(covmats_dict["targets"]))
+upper_triu_sample_covmats = torch.Tensor(np.array(covmats_dict["upper_triu_sample_covmats"]))
+sample_corr_mats = torch.Tensor(np.array(covmats_dict["sample_corr_mats"]))
+upper_triu_sample_corrmats = torch.Tensor(np.array(covmats_dict["upper_triu_sample_corrmats"]))
+
+train_loop_batch_TENSORTEST()
