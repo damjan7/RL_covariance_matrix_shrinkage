@@ -27,15 +27,20 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
     past_return_matrices = []
     future_return_matrices = []
+    past_price_matrices = []
     # future return matrices do not need to be demeaned of course!
     for idx, reb in enumerate(rebalancing_days_full['actual_reb_day']):
         assert reb == rebalancing_days_full['actual_reb_day'][idx]  # if this never failed, can just iterate through shape[0] of rebalancing_days_full
         tmp_mat = hf.get_return_matrix(df, rebalancing_days_full['actual_reb_day'][idx], rebalancing_days_full['prev_reb_day'][idx], p_largest_stocks.loc[reb, :].values)
         tmp_mat = hf.demean_return_matrix(tmp_mat)
         past_return_matrices.append(tmp_mat)
-
+        # get future return matrices
         tmp_mat = hf.get_return_matrix(df, rebalancing_days_full['fut_reb_day'][idx], rebalancing_days_full['actual_reb_day'][idx], p_largest_stocks.loc[reb, :].values)
         future_return_matrices.append(tmp_mat)
+        # get past price data
+        tmp_mat = hf.get_price_matrix(df, rebalancing_days_full['actual_reb_day'][idx], rebalancing_days_full['prev_reb_day'][idx], p_largest_stocks.loc[reb, :].values)
+        past_price_matrices.append(tmp_mat)
+
 
     # now let us save these return matrices to memory so we can use them all the time
     # The wb indicates that the file is opened for WRITING in binary mode.
@@ -50,6 +55,10 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     with open(rf"{out_path}\trading_days.pickle", 'wb') as pickle_file:
         pickle.dump(trading_days, pickle_file)
 
+    # save past price data
+    with open(rf"{out_path}\past_price_matrices_p{p}.pickle", 'wb') as pickle_file:
+        pickle.dump(past_price_matrices, pickle_file)
+
     print("done")
 
 
@@ -62,7 +71,7 @@ end_date = 20171231
 estimation_window_length = 1
 out_of_sample_period_length = 20
 pf_size = 30  # [30, 50, 100, 225, 500]
-return_data_path = r"/return_matrices"
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
 
 create_data_matrices(path=in_path,
                      end_date=end_date,
