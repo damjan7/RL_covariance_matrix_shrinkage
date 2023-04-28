@@ -11,7 +11,6 @@ import gym
 from gym import spaces
 from preprocessing_scripts import helper_functions as hf
 import pickle
-from RL.RL_dev.RL_covariance_estimators import cov1Para
 import torch
 
 import torch
@@ -24,6 +23,9 @@ import numpy as np
 import gym
 from gym.wrappers import Monitor
 from collections import deque
+
+# import shrinkage estimators
+from RL.RL_dev import RL_covariance_estimators as rl_shrkg_est
 
 
 # Q1: should the estimator and the shrinkage intensities be supplied to the agent or estimated within
@@ -54,7 +56,10 @@ class MyEnv(gym.Env):
         # for now discrete as my RL algos are written for discrete cases only
         self.action_space = spaces.Discrete(100)
 
+
         # load the data into the environment
+        # IDEA: could calculate all the intensities etc here so they do not to be caluclated over and over again
+
         self.return_data_path = return_data_path
         self.pf_size = pf_size
         with open(rf"{self.return_data_path}\past_return_matrices_p{self.pf_size}.pickle", 'rb') as f:
@@ -97,15 +102,27 @@ class MyEnv(gym.Env):
         action = shrinkage intensity
         '''
 
+
+        # calculate weights and using them, calculate pf return and pf
+        # target
+        #sigmahat = action * target + (1 - action) * sample.to_numpy()
+        #weights = hf.calc_global_min_variance_pf(sigmahat)
+
+        # advance in time, i.e., state increases by 1 timestep
+        self.state += 1
+        if self.state >= self.rebalancing_days_full.shape[0]-1:  # since we start at zero
+            self.done = True  # we reached the end of the dataset
+
         pass
 
 
     ## train loop: take state --> return action
     # state is only index in my case: hence the step function
 
-    def _get_obs_space(self):
+    def get_obs_space(self):
         """
         returns observation space for a given state space ( =index)
+        Should make use of it during the training loop
         """
         # This can all be written more efficiently, but want to keep it simple and clear as a first step
         date = self.rebalancing_days_full['actual_reb_day'].iloc[self.state]
@@ -114,5 +131,16 @@ class MyEnv(gym.Env):
 
         # calc the stuff I want my rl agent to have, i.e., shrinkage_intensity, vola, some factors
         # start small
+
+        # get shrinkage intensity obtained by some estimator
+        shrinkage, target = rl_shrkg_est.get_shrinkage_cov1Para(past_return_data)
+        # maybe also need the target, as it should be used in the step() function to calculate
+        # the actual estimator [is needed for global min pf as an input]
+
+        # let's use something like 60 day past volatility
+        volas = hf.get_historical_vola(past_price_data, days=60)  # shape: (num_stocks, ); np.array
+
+        return shrinkage, volas, target
+
 
 
