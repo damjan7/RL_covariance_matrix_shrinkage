@@ -387,3 +387,15 @@ def calc_pf_weights_returns_vars_TENSOR(estimator, reb_days, past_return_mat, fu
     '''
 
     return total_portfolio_return_daily, total_pf_std_daily
+
+
+def get_historical_vola(df_price, days):
+    """
+    calculate historical volatility of some stocks
+    :param df_price: past prices
+    :param days: timeframe considered in (trading) days
+    :return: historical volatility
+    """
+    volas = df_price.iloc[-days:, :].std()  # get std for each stock
+    return volas.values
+
