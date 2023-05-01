@@ -29,6 +29,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
     past_return_matrices = []
     future_return_matrices = []
+    past_price_matrices = []
     # future return matrices do not need to be demeaned of course!
     for idx, reb in enumerate(rebalancing_days_full['actual_reb_day']):
         assert reb == rebalancing_days_full['actual_reb_day'][idx]  # if this never failed, can just iterate through shape[0] of rebalancing_days_full
@@ -38,6 +39,9 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
         tmp_mat = hf_rl.get_return_matrix(df, rebalancing_days_full['fut_reb_day'][idx], rebalancing_days_full['actual_reb_day'][idx], p_largest_stocks.loc[reb, :].values)
         future_return_matrices.append(tmp_mat)
+
+        tmp_mat = hf_rl.get_price_matrix(df, rebalancing_days_full['actual_reb_day'][idx], rebalancing_days_full['prev_reb_day'][idx], p_largest_stocks.loc[reb, :].values)
+        past_price_matrices.append(tmp_mat)
 
     # now let us save these return matrices to memory so we can use them all the time
     # The wb indicates that the file is opened for WRITING in binary mode.
@@ -51,6 +55,10 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
         pickle.dump(rebalancing_days_full, pickle_file)
     with open(rf"{out_path}\trading_days.pickle", 'wb') as pickle_file:
         pickle.dump(trading_days, pickle_file)
+
+    # save past price data
+    with open(rf"{out_path}\past_price_matrices_p{p}.pickle", 'wb') as pickle_file:
+        pickle.dump(past_price_matrices, pickle_file)
 
     print("done")
 

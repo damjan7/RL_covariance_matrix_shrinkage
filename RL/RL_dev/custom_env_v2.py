@@ -11,7 +11,7 @@ import gym
 from gym import spaces
 from preprocessing_scripts import helper_functions as hf
 import pickle
-import torch
+from sklearn import preprocessing
 
 import torch
 import torch.nn as nn
@@ -44,6 +44,7 @@ class MyEnv(gym.Env):
         # = shrinkage intensity, and other factors?
         # can package it inside a gym.spaces.Dict
         # maybe testing without 60_day vola first!
+        # just use a concatenated vector as observation space, i.e. shrinkage intensity and vola in a vector
         self.observation_space = spaces.Dict(
             {
                 "shrinkage_intensity": spaces.Discrete(100),  # actually continuous
@@ -72,6 +73,10 @@ class MyEnv(gym.Env):
             self.rebalancing_days_full = pickle.load(f)
 
 
+        with open(rf"{self.return_data_path}\past_price_matrices_p{self.pf_size}.pickle", 'rb') as f:
+            self.past_price_matrices = pickle.load(f)
+
+
     def reset(self):
         '''
         This method should return the first state in our environment
@@ -93,7 +98,7 @@ class MyEnv(gym.Env):
 
 
 
-    def step(self, action):
+    def step(self, action, target):  # for now target is also a input, will be changed later! [get_obs gives target]
         '''
         This method calculates new state and the reward obtained by the action
         new state will just be next date
@@ -101,23 +106,23 @@ class MyEnv(gym.Env):
 
         action = shrinkage intensity
         '''
-
-
         # calculate weights and using them, calculate pf return and pf
-        # target
-        #sigmahat = action * target + (1 - action) * sample.to_numpy()
-        #weights = hf.calc_global_min_variance_pf(sigmahat)
+        sample = self.past_return_matrices[self.state].values.T @ self.past_return_matrices[self.state].values
+        sigmahat = action * target + (1 - action) * sample  # debug
+        weights = hf.calc_global_min_variance_pf(sigmahat)
+
+        # calc future returns and using them calc pf std
+        weighted_daily_returns = self.future_return_matrices[self.state] @ weights
+        total_pf_std_daily = np.std(weighted_daily_returns) * np.sqrt(252)
+        reward = - total_pf_std_daily
 
         # advance in time, i.e., state increases by 1 timestep
         self.state += 1
         if self.state >= self.rebalancing_days_full.shape[0]-1:  # since we start at zero
             self.done = True  # we reached the end of the dataset
 
-        pass
+        return self.state, reward, self.done, None  # None = Info, first return value should be obs
 
-
-    ## train loop: take state --> return action
-    # state is only index in my case: hence the step function
 
     def get_obs_space(self):
         """
@@ -138,9 +143,27 @@ class MyEnv(gym.Env):
         # the actual estimator [is needed for global min pf as an input]
 
         # let's use something like 60 day past volatility
+        # IDEA ##################################################
+        # maybe take mean vola or something like a stock basket?
+        # or MEAN of scaled stock volas
         volas = hf.get_historical_vola(past_price_data, days=60)  # shape: (num_stocks, ); np.array
+        scaled_volas = preprocessing.MaxAbsScaler().fit_transform(volas.reshape(-1, 1))
 
-        return shrinkage, volas, target
+        return shrinkage, scaled_volas, target  # shrinkage, volas are passed to the network
 
 
+
+    ## train loop: take state --> return action
+    # state is only index in my case: hence the step function
+
+
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
+pf_size=30
+myenv = MyEnv(return_data_path, pf_size)
+myenv.reset()
+shkrg = myenv.get_obs_space()[0]
+tgt = myenv.get_obs_space()[2]
+myenv.step(shkrg, tgt)
+
+print("debug")
 

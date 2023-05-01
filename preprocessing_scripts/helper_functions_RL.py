@@ -214,6 +214,24 @@ def get_return_matrix(df, rebalancing_date_end, rebalancing_date_start, permno):
     return tmp_df
 
 
+def get_price_matrix(df, rebalancing_date_end, rebalancing_date_start, permno):
+    """
+    Given data input matrix, rebalancing date, and permno numbers of the p stocks of interest,
+    returns the PRICE matrix
+    Also, the remaining NaN's are filled with zeros
+    :param df: full data matrix
+    :param rebalancing_date_end: rebalancing date
+    :param permno: list of p stocks with the largest market cap without more than 5% of NaN's in past 252 trading days
+    :return: matrix in format [n * p], dates on y axis, stocks on x axis
+    """
+    tmp_df = df[(rebalancing_date_start <= df['date']) & (df['date'] < rebalancing_date_end)]
+    tmp_df = tmp_df[tmp_df['PERMNO'].isin(permno)]
+    tmp_df = tmp_df.pivot(index='date', columns='PERMNO', values='PRC')
+    tmp_df = tmp_df.fillna(0)
+    #assert tmp_df.shape[0] == 252  # not when looking at future matrices, then shape is 21 !!
+    #assert tmp_df.shape[1] == 100
+    return tmp_df
+
 def demean_return_matrix(df):
     """
     given return matrix, returns de-meaned return matrix
