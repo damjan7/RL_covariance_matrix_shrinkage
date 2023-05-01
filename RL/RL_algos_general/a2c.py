@@ -19,10 +19,9 @@ class ActorCriticDiscrete(nn.Module):
         self.fc1 = nn.Linear(num_features, hidden_size)
         self.fc2 = nn.Linear(hidden_size, int(hidden_size/2))
 
-        ### In the implementations I found online, the output of the critic is only 1-d
-        ### i.e. kind of only the state value not the state action value???
-        self.actor_head = nn.Linear(int(hidden_size/2), num_actions)
-        self.critic_head = nn.Linear(int(hidden_size/2), 1)
+
+        self.actor_head = nn.Linear(int(hidden_size/2), num_actions)  # probabilistic mapping from states to actions
+        self.critic_head = nn.Linear(int(hidden_size/2), 1)  # estimated state value
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
