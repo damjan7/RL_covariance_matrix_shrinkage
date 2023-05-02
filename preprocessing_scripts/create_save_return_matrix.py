@@ -70,7 +70,7 @@ in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
 end_date = 20171231
 estimation_window_length = 1
 out_of_sample_period_length = 20
-pf_size = 30  # [30, 50, 100, 225, 500]
+pf_size = 100  # [30, 50, 100, 225, 500]
 return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
 
 create_data_matrices(path=in_path,

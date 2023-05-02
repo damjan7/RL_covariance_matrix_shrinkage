@@ -11,7 +11,7 @@ from gym.wrappers import Monitor
 from collections import deque
 from itertools import count
 
-from RL.RL_dev.custom_env_v2 import MyEnv
+from RL.RL_dev.custom_tensor_env import MyEnv
 
 
 class ActorCriticDiscrete(nn.Module):
@@ -59,14 +59,14 @@ def train():
             ep_log_probs.append(log_prob)
             # as we have discrete random variables from 1 to 100 we divide action by 100
             # OR DO, SHRINKAGE + action.item() / 100
-            state, reward, done, _, = env.step(action.item() / num_actions, target)
+            state, reward, done, _, = env.step(action / num_actions, target)
             ep_rewards.append(reward)
             if done:
                 break
         # once we went through the episode, update weights and print some stuff
         running_reward.append(sum(ep_rewards))
         running_reward = running_reward[1:]
-        if episode % 10 == 0:
+        if episode % 30 == 0:
             print(f"Reward of Episode {episode}: {np.mean(ep_rewards)} \t "
                   f"Avg Reward of Last 10 Episodes: {sum(running_reward)/10}")
 
@@ -88,7 +88,7 @@ def train():
         value_loss = 0.5 * (advantage.pow(2)).mean()
         loss = policy_loss + value_loss  # - eps * torch.stack(entropy).mean()
 
-        if episode % 10 == 0:
+        if episode % 30 == 0:
             print("break")
 
         optimizer.zero_grad()

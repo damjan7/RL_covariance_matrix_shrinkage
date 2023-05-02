@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
+from sklearn import preprocessing
 
 def get_p_largest_stocks(df, rebalancing_date, rebalancing_date_12months_before, rebalancing_date_plus_one,  p):
     """
@@ -396,6 +397,17 @@ def get_historical_vola(df_price, days):
     :param days: timeframe considered in (trading) days
     :return: historical volatility
     """
-    volas = df_price.iloc[-days:, :].std()  # get std for each stock
+    #print("CURRENTLY, PRICES ARE SCALED USING MinMaxScaler BEFORE CALCULATING VOLA")
+    dat = pd.DataFrame(preprocessing.MinMaxScaler().fit_transform(df_price.iloc[-days:, :]))
+    volas = dat.std()  # get std for each stock
+
     return volas.values
 
+
+def polyfit(y, degree=1):
+    '''
+    linreg using np.polyfit for testing, needs only y it is used with losses over time
+    '''
+    x = np.arange(0, len(y))
+    z = np.polyfit(x, y, degree)
+    print(f"{z[1]} + {z[0]} * x")

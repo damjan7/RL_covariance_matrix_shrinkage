@@ -108,13 +108,13 @@ class MyEnv(gym.Env):
         '''
         # calculate weights and using them, calculate pf return and pf
         sample = self.past_return_matrices[self.state].values.T @ self.past_return_matrices[self.state].values
+        sample = torch.Tensor(sample)
+        target = torch.Tensor(target)
         sigmahat = action * target + (1 - action) * sample  # debug
-        weights = hf.calc_global_min_variance_pf(sigmahat)
-
-        # calc future returns and using them calc pf std
-        weighted_daily_returns = self.future_return_matrices[self.state] @ weights
-        total_pf_std_daily = np.std(weighted_daily_returns) * np.sqrt(252)
-        reward = - total_pf_std_daily
+        pfret, pfstd = hf.calc_pf_weights_returns_vars_TENSOR(
+            sigmahat, None, self.past_return_matrices[self.state], self.future_return_matrices[self.state]
+        )
+        reward = - pfstd
 
         # advance in time, i.e., state increases by 1 timestep
         self.state += 1

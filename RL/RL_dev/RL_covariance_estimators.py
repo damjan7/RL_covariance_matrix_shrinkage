@@ -62,3 +62,7 @@ def get_shrinkage_cov1Para(X, k=None):
     shrinkage = max(0, min(1, kappahat/n))
 
     return shrinkage, target
+
+
+def get_shrinkage_identity(X):
+    pass

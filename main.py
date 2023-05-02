@@ -2,13 +2,14 @@ import pandas as pd
 
 from estimation import CovMatEstimation
 from parameters import params
+import covariance_estimators
 
 end_date = 20171231
 # when changing estimation window length OR out of sample period
 # need to re-run 'create_save_return_matrix.py' to get new return matrices
 estimation_window_length = 1
 out_of_sample_period_length = 20
-pf_size = 500  # [30, 50, 100, 225, 500]
+pf_size = 100  # [30, 50, 100, 225, 500]
 estimator = None
 raw_data_path = None
 return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
@@ -20,6 +21,10 @@ result_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\resu
 model1 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_period_length, pf_size,
                           params["estimator"]["cov1para"],
                           raw_data_path, return_data_path, result_data_path)
+
+model_test = CovMatEstimation(end_date, estimation_window_length, out_of_sample_period_length, pf_size,
+                              covariance_estimators.cov1Para_onlytarget,
+                              raw_data_path, return_data_path, result_data_path)
 
 model2 = CovMatEstimation(end_date, estimation_window_length, out_of_sample_period_length, pf_size,
                           params["estimator"]["cov2para"],
