@@ -357,7 +357,6 @@ def calc_pf_weights_returns_vars_TENSOR(estimator, reb_days, past_return_mat, fu
     weighted_daily_returns = []
     daily_dates = []
 
-
     permno = past_return_mat.columns
     covmat_estimate = estimator
     #weights = calc_global_min_variance_pf(covmat_estimate)

@@ -59,6 +59,11 @@ def calculate_pf_return_std_TENSORTEST(shrinkage_intensitiy, target, sample, reb
     pf_return_daily, pf_std_daily = hf.calc_pf_weights_returns_vars_TENSOR(estimator, reb_days, pas_ret_mat, fut_ret_mat)
     return pf_return_daily, pf_std_daily
 
+
+def test_calculate_pf_std(shrkg, trgt, smpl, past_ret, fut_ret):
+    est = shrkg * trgt + (1-shrkg) * sample
+
+
 # DATA
 return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
 pf_size = 100
@@ -128,7 +133,7 @@ for epoch in range(1, epochs+1):
         # update
 
         loss.append(res2)
-        if (i+1) % 32 == 0:
+        if (i+1) % 32 == 0:  # batched update
             optimizer.zero_grad()
             loss = torch.stack(loss).mean()
             loss.backward(retain_graph=True)
@@ -137,10 +142,10 @@ for epoch in range(1, epochs+1):
 
     #print(0/0)
     epoch_loss.append(np.mean(cur_epoch_loss))
-    if epoch % 15 == 0:
+    if epoch % 30 == 0:
         print("cool, epoch loss:", epoch_loss)
         print("cool")
-        print(1/0)
+        #print(1/0)
 
 
 
