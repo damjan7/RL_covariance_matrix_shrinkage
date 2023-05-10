@@ -15,12 +15,13 @@ df_full = pd.DataFrame(columns=['model_1', 'model_2', 'model_3', 'model_4', 'mod
 
 # model 6 is the "opt" theoretical shrinkage model
 for i, file in enumerate(os.listdir(file_folder)):
-    pth = file_folder + "/" + file
-    with open(pth, 'rb') as f:
-        df = pickle.load(f)
-        df.columns = df.iloc[0, :]
-        df = df.drop(0)
-    df_full[f"model_{i+1}"] = df['pf_std']
+    if file.startswith("factor"):
+        pth = file_folder + "/" + file
+        with open(pth, 'rb') as f:
+            df = pickle.load(f)
+            df.columns = df.iloc[0, :]
+            df = df.drop(0)
+    df_full[f"model_{i+1}"] = df['pf_std'].astype(float)
 
 
 #
@@ -36,7 +37,47 @@ df_new = pd.concat([(pd.DataFrame([df_full[col].values, hist_volas, np.full((249
 df_new.columns = ['model_std', 'hist_vola', 'model']
 
 fig = px.scatter(df_new, x = "hist_vola", y = "model_std", color="model")
-fig.show()
+# fig.show()
+
+# count of lowest portfolio std
+from collections import Counter
+counts = Counter(df_full.idxmin(axis=1).values)
+
+
+"""
+do the same testing but for the fixed shrinkages
+"""
+
+path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\fixed_shrkges_p100.pickle"
+with open(path, 'rb') as f:
+    df_fixed = pickle.load(f)
+    df_fixed.columns = df_fixed.iloc[0, :]
+    df_fixed = df_fixed.drop(0)
+    for col in range(1, df_fixed.shape[1]):
+        df_fixed.iloc[:, col] = df_fixed.iloc[:, col].astype(float) - df_full["model_6"]  # subtract the actual shrk. intensity
+    df_fixed.iloc[:, 0] = np.mean(df_fixed["hist_vola"].tolist(), axis=1)
+
+# basic analysis
+mins = df_fixed.iloc[:, 1:].idxmin(axis=1).values
+min_counts = Counter(mins)
+
+# plot historical volas
+n, bins, patches = plt.hist(x=df_fixed.iloc[:, 0].values, bins=10)
+plt.grid(axis='y', alpha=0.75)
+plt.xlabel('Value')
+plt.ylabel('Frequency')
+plt.show()
+
+volas_mean = hist_volas.mean()
+volas_std = hist_volas.std()
+
+# let's also see in cases where a higher shrkg intensity was better, if we also observed higher volas
+# let's look at cases, i.e., where cur_vola > volas_mean + volas_std * 0.5
+is_vola_larger = df_fixed.iloc[:, 0] > volas_mean + 0.5 * volas_std  # boolean
+df_vola_larger = df_fixed[is_vola_larger]
+mins = df_vola_larger.iloc[:, 1:].idxmin(axis=1).values
+min_counts_vola_larger = Counter(mins)
+
 
 print("ok, cool")
 

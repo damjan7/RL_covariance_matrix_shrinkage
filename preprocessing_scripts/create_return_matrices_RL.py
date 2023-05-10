@@ -17,7 +17,8 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
     # start_date is returned but nowhere used :-)
 
-    rebalancing_days_full = hf_rl.get_full_rebalancing_dates_matrix(rebalancing_days, estimation_window_length)
+    # returns just every trading day, hence no estimation window length is needed
+    rebalancing_days_full = hf_rl.get_full_rebalancing_dates_matrix(rebalancing_days)
     p_largest_stocks = hf_rl.get_p_largest_stocks_all_reb_dates_V2(df, rebalancing_days_full, p)
 
     # check if the "actual" rebalancing days are equal

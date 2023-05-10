@@ -410,3 +410,17 @@ def polyfit(y, degree=1):
     x = np.arange(0, len(y))
     z = np.polyfit(x, y, degree)
     print(f"{z[1]} + {z[0]} * x")
+
+def calc_pf_std_return(covmat_estimate, future_return_matrix):
+    """
+    calculate the portfolio standard deviation and returns using the "average" method from gianluca papers
+    First, calculate weights using the global minimum variance (GMV)
+    then just calculate the (weighted) 21 future returns [i.e. every day]  [weights * daily returns]
+    then take the mean and the standard deviation from them, and annualise them
+    :return: pf std, pf returns
+    """
+    weights = calc_global_min_variance_pf(covmat_estimate)
+    weighted_daily_returns = future_return_matrix @ weights
+    total_pf_return_daily = np.mean(weighted_daily_returns) * 252
+    total_pf_std_daily = np.std(weighted_daily_returns) * np.sqrt(252)
+    return total_pf_return_daily, total_pf_std_daily

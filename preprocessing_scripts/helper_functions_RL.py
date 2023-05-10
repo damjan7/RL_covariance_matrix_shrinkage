@@ -257,7 +257,7 @@ def calc_global_min_variance_pf(covmat_estimator):
     return np.reshape(w, p)  # reshape to 1d array, doesn't np.ravel() also work instead? i.e. from (p,1) to (p)
 
 
-def get_full_rebalancing_dates_matrix(rebalancing_days, estimation_window_length):
+def get_full_rebalancing_dates_matrix(rebalancing_days):
     """
     Given the rebalancing dates, return the full rebalancing dates matrix containing the current rebalancing date,
     the rebalancing date 12 months before, and the rebalancing date 1 month in the future
