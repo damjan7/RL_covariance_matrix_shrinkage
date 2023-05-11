@@ -157,7 +157,7 @@ class MyEnv(gym.Env):
     # state is only index in my case: hence the step function
 
 
-return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices"
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets"
 pf_size = 100
 myenv = MyEnv(return_data_path, pf_size)
 myenv.reset()
