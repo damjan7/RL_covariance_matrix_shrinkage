@@ -103,7 +103,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     # loop through all factors and the past data
     # can add everything to 1 data
     for factor in shrk_factors:
-        res = [["shrk_factor", "hist_vola", "pf_return", "pf_std"]]
+        res = [["date", "shrk_factor", "hist_vola", "pf_return", "pf_std"]]
         for idx, past_return_matrix in enumerate(past_return_matrices):
             shrk_est, sample, target = estimator(past_return_matrix)
             new_shrk_est = factor * shrk_est
@@ -112,20 +112,24 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
             pf_ret, pf_std = hf.calc_pf_std_return(covmat_est, future_return_matrices[idx])
             # also want historical (can choose days) vola (and in future maybe different factors)
             hist_vola = hf.get_historical_vola(past_price_matrices[idx], days=60)
-            res.append([new_shrk_est, hist_vola, pf_ret, pf_std])
+            date = past_return_matrix.index[0]
+            res.append([date, new_shrk_est, hist_vola, pf_ret, pf_std])
         # save to pandas dataframe and then to disk, for each factor separately
         df = pd.DataFrame(res)
+        df.columns = df.iloc[0, :]
+        df = df.drop(0)
         with open(rf"{out_path_shrk}\factor-{factor}_p{p}.pickle", 'wb') as pickle_file:
             pickle.dump(df, pickle_file)
 
     """
     Below: just 10 shrk intensities from 0.1 to 0.9 to have a general overview what good shrk intensities are
     """
-    shrk_intensities_v2 = np.round(np.linspace(0.1, 0.9, 10), 2)
+    shrk_intensities_v2 = np.round(np.linspace(0, 1, 21), 2)
     colnames = list(shrk_intensities_v2.astype(str))
-    res = [["hist_vola"] + colnames]
+    res = [["date", "hist_vola"] + colnames]
     for idx, past_return_matrix in enumerate(past_return_matrices):
         shrk_res = []
+        date = past_return_matrix.index[0]
         for shrk in shrk_intensities_v2:
             shrk_est, sample, target = estimator(past_return_matrix)
             new_shrk_est = shrk
@@ -136,9 +140,11 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
         # also want historical (can choose days) vola (and in future maybe different factors)
         hist_vola = hf.get_historical_vola(past_price_matrices[idx], days=60)
-        res.append([hist_vola] + shrk_res)
+        res.append([date, hist_vola] + shrk_res)
         # save to pandas dataframe and then to disk, for each factor separately
     df = pd.DataFrame(res)
+    df.columns = df.iloc[0, :]
+    df = df.drop(0)
     with open(rf"{out_path_shrk}\fixed_shrkges_p{p}.pickle", 'wb') as pickle_file:
         pickle.dump(df, pickle_file)
 
@@ -146,7 +152,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
 ##### Let's call the function to create the necessary data frames
 in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
-end_date = 19901231
+end_date = 20051231
 estimation_window_length = -99
 out_of_sample_period_length = -99
 pf_size = 100  # [30, 50, 100, 225, 500]
