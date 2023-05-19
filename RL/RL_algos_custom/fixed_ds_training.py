@@ -10,6 +10,12 @@ from torch import nn
 from torch.nn import functional as F
 import torch.optim as optim
 from sklearn import preprocessing
+from torch.utils.data import DataLoader, Dataset
+
+# plotting
+import matplotlib.pyplot as plt
+
+from RL.RL_algos_custom import eval_funcs
 
 
 ##### CHECK IF THE DATES ACTUALLY CORRESPOND TO EACH OTHER!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -63,37 +69,141 @@ class ActorCritic(nn.Module):
 
 # PARAMETERS:
 num_epochs = 100
-lr = 1e-3
+lr = 1e-4
 num_features = factors.shape[1] + 1  # all 13 factors + opt shrk
 num_actions = fixed_shrk_data.shape[1] - 2  # since 1 col is dates, 1 col is hist vola
 hidden_layer_size = 128
 net = ActorCritic(num_features, num_actions, hidden_layer_size)
 optimizer = optim.Adam(net.parameters(), lr=lr)
-
 criterion = nn.MSELoss()
 
 # TRAIN LOOP
+def train_manual():
+    for epoch in range(1, num_epochs+1):
+        epoch_loss=[]
+        for i in range(factors.shape[0]):
+            inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
+            out, _ = net(inp.view(1, -1))
+            # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
+            labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
 
-for epoch in range(1, num_epochs+1):
-    epoch_loss=[]
-    for i in range(factors.shape[0]):
-        inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
-        out, _ = net(inp.view(1, -1))
-        # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
-        labels = torch.Tensor(np.array(fixed_shrk_data.iloc[0, 2:].values, dtype=float)).view(1, -1)
+            # CALC LOSS AND BACKPROPAGATE
+            optimizer.zero_grad()
+            loss = criterion(out, labels)
+            loss.backward()
+            optimizer.step()
 
-        # CALC LOSS AND BACKPROPAGATE
-        optimizer.zero_grad()
-        loss = criterion(out, labels)
-        loss.backward()
-        optimizer.step()
+            epoch_loss.append(loss.item())
 
-        epoch_loss.append(loss.item())
+        # end of epoch statistics
+        print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
+        if epoch % 10 == 0:
+             print("break :-)")
 
-    # end of epoch statistics
-    print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
-    if epoch % 10 == 0:
-         print("break :-)")
+        # validate at end of each epoch
+
+#train_manual()
+
+##### IMPLEMENTATION WITH DATALOADER
+
+
+class MyDataset(Dataset):
+
+    def __init__(self, factors, fixed_shrk_data, optimal_shrk_data):
+        self.factors = factors
+        self.fixed_shrk_data = fixed_shrk_data
+        self.optimal_shrk_data = optimal_shrk_data
+
+    def __len__(self):
+        return self.factors.shape[0]
+
+    def __getitem__(self, idx):
+        # inputs multiplied by 100 works better
+        inp = torch.Tensor(np.append(self.factors.iloc[idx, :].values, self.optimal_shrk_data.iloc[idx, 1])) * 100
+        labels = torch.Tensor(np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float))
+        # for labels: .view(1, -1) not needed when working with Dataset and DataLoader
+        return inp, labels
+
+def train_with_dataloader():
+
+    # split dataset into train and test
+    batch_size = 16
+    total_num_batches = factors.shape[0] // batch_size
+    len_train = int(total_num_batches * 0.7) * batch_size
+    train_dataset = MyDataset(
+        factors.iloc[:len_train, :],
+        fixed_shrk_data.iloc[:len_train, :],
+        optimal_shrk_data.iloc[:len_train, :]
+    )
+    val_dataset = MyDataset(
+        factors.iloc[len_train:, :],
+        fixed_shrk_data.iloc[len_train:, :],
+        optimal_shrk_data.iloc[len_train:, :]
+    )
+    train_dataloader = DataLoader(train_dataset)
+    val_dataloader = DataLoader(val_dataset)
+
+
+    validation_loss = []
+
+    for epoch in range(1, num_epochs+1):
+        train_preds = []
+        val_preds = []
+        actual_train_labels = []
+        epoch_loss = []
+        for i, data in enumerate(train_dataloader):
+            X, labels = data
+            actual_train_labels.append(torch.argmin(labels).item())
+            out, _ = net(X.view(1, -1))
+            train_preds.append(torch.argmin(out).item())
+            # CALC LOSS AND BACKPROPAGATE
+            optimizer.zero_grad()
+            loss = criterion(out, labels)
+            loss.backward()
+            optimizer.step()
+            epoch_loss.append(loss.item())
+
+        # end of epoch statistics
+        print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
+        if epoch % 10 == 0:
+            print("break :-)")
+            # calc validation loss
+
+        # validate at end of epoch
+        # set model into evaluation mode and deactivate gradient collection
+        net.eval()
+        epoch_val_loss = []
+        actual_argmin_validationset = []
+        with torch.no_grad():
+            for i, data in enumerate(val_dataloader):
+                X, labels = data
+                out, _ = net(X.view(1, -1))
+                val_preds.append(torch.argmin(out).item())
+                loss = criterion(out, labels)
+                epoch_val_loss.append(loss.item())
+
+                actual_argmin_validationset.append(torch.argmin(labels).item())
+
+            # print mean and sd of val loss
+            print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
+            # set model back into train mode
+
+            # return mean pf std of opt shrk estimator and shrk estimators chosen by my network
+            pfstd1, pfstd2 = eval_funcs.evaluate_preds(val_preds,
+                                                       val_dataset.optimal_shrk_data,
+                                                       val_dataset.fixed_shrk_data)
+            print(f"pf std with shrkges chosen by network: {pfstd1} \n"
+                  f"pf std with shrkges chosen by classical optimizer: {pfstd2}")
+
+            eval_funcs.simple_plot(val_preds, actual_argmin_validationset)
+            #eval_funcs.simple_plot(val_preds, optimal_shrk_data["shrk_factor"], map1=True, map2=True)
+
+
+            net.train()
+
+
+
+train_with_dataloader()
 
 print("done")
 

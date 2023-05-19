@@ -152,7 +152,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
 ##### Let's call the function to create the necessary data frames
 in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
-end_date = 20051231
+end_date = 20220331  # create it for the full data set
 estimation_window_length = -99
 out_of_sample_period_length = -99
 pf_size = 100  # [30, 50, 100, 225, 500]
@@ -161,7 +161,7 @@ return_data_path2 = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\ret
 estimator = estimators.get_cov1Para
 
 # in_path = None, if the necessary matrices already exist
-create_data_matrices(path=None,
+create_data_matrices(path=in_path,
                      end_date=end_date,
                      p=pf_size,
                      out_pf_sample_period_length=out_of_sample_period_length,
