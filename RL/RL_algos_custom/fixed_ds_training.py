@@ -18,6 +18,54 @@ import matplotlib.pyplot as plt
 from RL.RL_algos_custom import eval_funcs
 
 
+"""
+Explanation:
+In this script, I work with the fixed dataset, i.e., for every day, we have 21 fixed shrinkage intensities. Using
+all these 21 shrinkage intensities, the pf sd is calculated (21 day holding period as usual). Then we have a full
+dataset of "actions" and "rewards"/labels.
+I then train them in a "supervised" manner. The idea is to estimate the value function for each state, action pair.
+Or RATHER (more precisely) just estimate the state-action value function (as I do it for "all" possible actions - 
+not actually all as I discretize the action space).
+
+This gives should give me a good approximation of the "true" action-value function. Using this it is easy
+to pick the best action -- just pick the argmax of the outputs of this network (of the state-action value network).
+
+Thoughts: This may seem like a supervised problem but it isn't actually. Of course, I use supervised learning
+but this is to approximate the true state-action value function as closely as possible 
+[supervised learning with NN's is always function approximation]. I could do the exactly same 
+training in more "classical" RL ways: letting my network pick an action, then calculate the reward and then
+adapt my state-action value function. But this only makes the training slower. And just logically thinking,
+WHY would I want to use only 1 label as signal (i.e. 1 reward according to the action the network has chosen), instead
+of all possible signals.....
+
+As far as I understand it, I am doing off policy learning, actually there is no policy at all as we look at all
+actions and the corresponding rewards.
+
+What I could do now is also regularize the network and stuff like this to achieve more of an generalized
+approximation (not only learning heavily on training data!) 
+
+LOL; before I read the chapter 9 [part 2] of RL book, I implemented this, and, i.e., in ch9.3 they suggest
+exactly this idea (but for state value functions)
+
+Alternative idea? -> We could also create such a fixed dataset using a fixed policy. For example compose a linear func
+of the optimal shrinkage intensity according to some estimator and the factor data
+something like: shrk_new = shrk_opt * b1 + factors * W
+and depending on the reward, optimize b1 and W to find a better shrk intensity
+
+CAN I THINK OF MY IMPLEMENTATION AS POLICY GRADIENT FOLLOWING 21 POLICIES AT THE SAME TIME AND LOOKING JUST 1 
+STEP AHEAD. I.E., OUTPUT OF NETWORK IS EXPECTED ONE STEP REWARD??????
+
+Weiterer Punkt: ja, vielleicht ist die state-action value function einiges entfernt von derjenigen in den
+out of sample daten, ABER, uns interessiert schlussendlich ja nur das RANKING zwischen den actions (welche action
+schneidet am besten ab etc). Und da kann es ja trotzdem funktionieren. 
+
+
+IMPORTANT NOTE; I MAY HAVE A SMALL OVERLAP OF TRAIN AND TEST SET AND THIS HAS TO BE RESOLVED FOR THE LATER 
+IMPLEMENTATION
+FOR NOW, I DON'T THINK THIS MAKES A BIG DIFFERENCE AS IT MAY ONLY BE ~21 DAYS
+"""
+
+
 ##### CHECK IF THE DATES ACTUALLY CORRESPOND TO EACH OTHER!!!!!!!!!!!!!!!!!!!!!!!!!!
 # they do according to a QUICK MANUAL CHECK..
 
@@ -51,7 +99,7 @@ class ActorCritic(nn.Module):
         self.fc2 = nn.Linear(hidden_size, int(hidden_size/2))
 
         self.actor_head = nn.Linear(int(hidden_size/2), num_actions)  # probabilistic mapping from states to actions
-        self.critic_head = nn.Linear(int(hidden_size/2), 1)  # estimated state value
+        self.critic_head = nn.Linear(int(hidden_size/2), 1)  # estimated state value, I don't use this for now
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -152,7 +200,7 @@ def train_with_dataloader():
         actual_train_labels = []
         epoch_loss = []
         for i, data in enumerate(train_dataloader):
-            X, labels = data
+            X, labels = data  # labels are actually the annualized pf standard deviations [= "reward"]
             actual_train_labels.append(torch.argmin(labels).item())
             out, _ = net(X.view(1, -1))
             train_preds.append(torch.argmin(out).item())
