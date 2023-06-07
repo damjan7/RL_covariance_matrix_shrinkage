@@ -10,12 +10,16 @@ from sklearn import preprocessing
 from torch.utils.data import DataLoader, Dataset
 
 # for action probs
-from torch.distributions import Categorical
+from torch.distributions import Normal, Beta, LogNormal
+
+
 
 # plotting
 import matplotlib.pyplot as plt
 
 from RL.RL_algos_custom import eval_funcs
+from RL.RL_dev import RL_covariance_estimators as rl_shrkg_est
+from preprocessing_scripts import helper_functions as hf
 
 
 '''
@@ -38,9 +42,6 @@ here we do NOT directly optimize the weights of the policy network according to 
 but we sample policies from the network and according to them we update the network
 
 --> NOTE; WE FIRST SAMPLE DISCRETELY, I.E. FROM THE 21 ACTIONS WE HAVE TO MAKE IT EASIER
-
-what I did is actually explained on p.200 of RL book, 
-see p.201 for update rule
 '''
 
 # IMPORT SHRK DATASETS
@@ -50,6 +51,8 @@ with open(rf"{shrk_data_path}\fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
 with open(rf"{shrk_data_path}\factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
+
+
 
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
 factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
@@ -61,6 +64,14 @@ start_date = '1980-01-15'
 start_idx = np.where(factors.index == start_date)[0][0]
 factors = factors.iloc[start_idx:start_idx+fixed_shrk_data.shape[0], :]
 
+# IMPORT remaining datasets
+pth = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
+with open(rf"{pth}\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
+    future_matrices = pickle.load(f)
+with open(rf"{pth}\past_return_matrices_p{pf_size}.pickle", 'rb') as f:
+    past_matrices = pickle.load(f)
+
+
 
 # define policy network
 class PolicyNetwork(nn.Module):
@@ -70,8 +81,8 @@ class PolicyNetwork(nn.Module):
         self.fc2 = nn.Linear(hidden_size, int(hidden_size/2))
 
 
-        self.actor_head = nn.Linear(int(hidden_size/2), num_actions)  # probabilistic mapping from states to actions
-        self.critic_head = nn.Linear(int(hidden_size/2), 1)  # estimated state value
+        self.mean_layer = nn.Linear(int(hidden_size/2), 1)  # output mean and variance of (log-)Normal dist
+        self.var_layer = nn.Linear(int(hidden_size/2), 1)
         self.dropout = nn.Dropout(p=0.25)
 
     def forward(self, x):
@@ -80,10 +91,10 @@ class PolicyNetwork(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.dropout(x)
         # get action distribution
-        action_probs = F.softmax(self.actor_head(x), dim=1)
+        mean = F.softplus(self.mean_layer(x))
+        var = F.softplus(self.var_layer(x))
         # how 'good' is the current state?, not needed here
-        state_value = self.critic_head(x)
-        return action_probs
+        return mean, var
 
 # define custom cataset
 class MyDataset(Dataset):
@@ -107,7 +118,7 @@ class MyDataset(Dataset):
 
 # PARAMETERS:
 num_epochs = 100
-lr = 1e-6
+lr = 1e-4
 num_features = factors.shape[1] + 1  # all 13 factors + opt shrk  [= INPUT DATA]
 num_actions = fixed_shrk_data.shape[1] - 2  # since 1 col is dates, 1 col is hist vola
 hidden_layer_size = 128
@@ -135,23 +146,43 @@ def train_manual():
             inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
             out = net(inp.view(1, -1))  # instead of q(s, a), out is now to be interpreted as action probs
 
-            multinom_dist = Categorical(out)
-            action = multinom_dist.sample()  # this is the action, and according to it calculate loss
-            # action is between 0 and 20
+            try:
+                beta_dist = Beta(out[0].squeeze(), out[1].squeeze())
+            except:
+                print("F")
+            action = beta_dist.sample()  # this is the action, and according to it calculate loss
 
-            # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
-            pf_std = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float))[action]
+            # now need to calculate pf std manually
+            shrinkage, target = rl_shrkg_est.get_shrinkage_cov1Para(past_matrices[i])
+            '''
+            a = action.item()
+            sample_mat = past_matrices[i].values.T @ past_matrices[i].values
+            sigmahat = a * target + (1-a) * sample_mat
+            weights = hf.calc_global_min_variance_pf(sigmahat)
+            weighted_daily_rets = future_matrices[i] @ weights
+            pf_std = np.std(weighted_daily_rets) * np.sqrt(252)
+            '''
 
-            train_pf_std.append(pf_std.item())
+            sample = past_matrices[i].values.T @ past_matrices[i].values
+            sample = torch.Tensor(sample)
+            target = torch.Tensor(target)
+            sigmahat = action * target + (1 - action) * sample  # debug
+            pfret, pf_std = hf.calc_pf_weights_returns_vars_TENSOR(
+                sigmahat, None, past_matrices[i], future_matrices[i]
+            )
+
+            train_pf_std.append(pf_std)
 
             # CALC LOSS AND BACKPROPAGATE
             # recall -> gradient descent so need to have a loss fct to minimize
             # pf_std should be minimal
+            # pf_std = torch.tensor(pf_std)
             optimizer.zero_grad()
-            log_prob =  multinom_dist.log_prob(action)  # log prob of policy dist evaluated at sampled action
+            log_prob = beta_dist.log_prob(action)  # log prob of policy dist evaluated at sampled action
             loss = pf_std * log_prob  # like policy gradient  [reward * ]
             loss.backward()
             optimizer.step()
+
 
             epoch_loss.append(loss.item())
 
@@ -168,80 +199,39 @@ def train_manual():
                 inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
                 out = net(inp.view(1, -1))  # instead of q(s, a), out is now to be interpreted as action probs
 
-                # now just predict with arg max!?
-                action = torch.argmax(out)
-                pf_std = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float))[action]
-                val_preds.append(action.item())
-                validation_loss.append(pf_std.item())  # just pf std
+                # now just predict again by sampling?
+
+                beta_dist = Beta(out[0].squeeze(), out[1].squeeze())
+                action = beta_dist.sample()  # this is the action, and according to it calculate loss
+
+                # now need to calculate pf std manually
+                shrinkage, target = rl_shrkg_est.get_shrinkage_cov1Para(past_matrices[i])
+                a = action.item()
+                sample_mat = past_matrices[i].values.T @ past_matrices[i].values
+                sigmahat = a * target + (1-a) * sample_mat
+                weights = hf.calc_global_min_variance_pf(sigmahat)
+                weighted_daily_rets = future_matrices[i] @ weights
+                pf_std = np.std(weighted_daily_rets) * np.sqrt(252)
+
+                val_preds.append(a)
+                validation_loss.append(pf_std)  # just pf std
                 actual_min_action = np.argmin(fixed_shrk_data.iloc[i, 2:])
                 actual_argmin_validationset.append(actual_min_action)
 
 
             print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(validation_loss)}, {np.std(validation_loss)}")
-            print("done ")
+            y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
+            if epoch == 5:
+                print("done ")
+            # eval_funcs.myplot(y2, val_preds)
         net.train()
 
 
 
 
-def train_with_dataloader():
-
-    # split dataset into train and test
-    batch_size = 16
-    total_num_batches = factors.shape[0] // batch_size
-    len_train = int(total_num_batches * 0.7) * batch_size
-    train_dataset = MyDataset(
-        factors.iloc[:len_train, :],
-        fixed_shrk_data.iloc[:len_train, :],
-        optimal_shrk_data.iloc[:len_train, :]
-    )
-    val_dataset = MyDataset(
-        factors.iloc[len_train:, :],
-        fixed_shrk_data.iloc[len_train:, :],
-        optimal_shrk_data.iloc[len_train:, :]
-    )
-    train_dataloader = DataLoader(train_dataset)
-    val_dataloader = DataLoader(val_dataset)
-
-    for epoch in range(1, num_epochs+1):
-        train_preds = []
-        val_preds = []
-        actual_train_labels = []
-        epoch_loss = []
-
-        for i, data in enumerate(train_dataloader):
-            inp, labels = data  # labels are actually the annualized pf standard deviations [= "reward"]
-
-            out = net(inp.view(1, -1))  # instead of q(s, a), out is now to be interpreted as action probs
-            multinom_dist = Categorical(out)
-            action = multinom_dist.sample()  # this is the action, and according to it calculate loss
-            # action is between 0 and 20
-
-            # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
-            pf_std = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float))[action]  # but need this for all datapoints in batch
-
-
-            actual_train_labels.append(torch.argmin(labels).item())
-
-
-            out, _ = net(X.view(1, -1))
-            train_preds.append(torch.argmin(out).item())
-            # CALC LOSS AND BACKPROPAGATE
-            optimizer.zero_grad()
-            loss = criterion(out, labels)
-            loss.backward()
-            optimizer.step()
-            epoch_loss.append(loss.item())
-
-        # end of epoch statistics
-        print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
-        if epoch % 10 == 0:
-            print("break :-)")
-            # calc validation loss
 
 
 
 # call train loop
 train_manual()
 
-train_with_dataloader()

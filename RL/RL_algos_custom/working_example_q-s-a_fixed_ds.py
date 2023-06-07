@@ -17,11 +17,13 @@ import matplotlib.pyplot as plt
 
 from RL.RL_algos_custom import eval_funcs
 
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 # X_std = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
 # X_scaled = X_std * (max - min) + min
 
-
+'''
+THIS SCRIPT INCLUDES THE MSE OF OPT SHRK (COV1PARA) AND NETWORK ARGMIN IN THE LOSS FCT 
+'''
 
 """
 Now, additionally use regularization (i.e. dropout) to improve generalization performance
@@ -132,10 +134,7 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # inputs multiplied by 100 works better
         inp = torch.Tensor(np.append(self.factors.iloc[idx, :].values, self.optimal_shrk_data.iloc[idx, 1])) * 100
-        labels = np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float)
-        labels = StandardScaler().fit_transform(labels.reshape(-1, 1))
-        labels = torch.Tensor(labels).squeeze()
-        #labels = torch.Tensor(np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float))
+        labels = torch.Tensor(np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float))
         # for labels: .view(1, -1) not needed when working with Dataset and DataLoader
         return inp, labels
 
@@ -183,7 +182,7 @@ def train_with_dataloader(normalize=False):
             optimizer.zero_grad()
             loss = criterion(out, labels)  # MSE between outputs of NN and pf std --> pf std can be interpreted
             # as value of taking action a in state s, hence want my network to learn this
-            # loss += criterion(out_shrk, opt_shrk)
+            loss += criterion(out_shrk, opt_shrk)
             loss.backward()
             optimizer.step()
             epoch_loss.append(loss.item())
