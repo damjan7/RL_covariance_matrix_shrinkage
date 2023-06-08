@@ -11,12 +11,29 @@ def evaluate_preds(val_preds, opt_preds_ds, fixed_shrk_ds):
     val preds = integers from 0 to x
     opt preds = shrk intensities according to some shrk estimator
     """
+
     d1 = fixed_shrk_ds.iloc[:, 2:]
     pf_std_val = d1.values[np.arange(d1.shape[0]), val_preds]
     pf_opt_shrk = opt_preds_ds["pf_std"]
 
-    return pf_std_val.mean(), pf_opt_shrk.mean()
+    return pf_std_val.mean(), pf_opt_shrk.mean(), pf_std_val.std(), pf_opt_shrk.std()
 
+
+def evaluate_preds_v2(val_preds, opt_preds_ds, fixed_shrk_ds):
+    """
+    This function evaluates predictions, in this functions, DISCRETE shrinkages from 0 to x (20) which correspond
+    to values between 0 and 1.
+    The predictions are evaluated against some of the optimal predictions according to some shrkg estimator
+
+    val preds = integers from 0 to x
+    opt preds = shrk intensities according to some shrk estimator
+    """
+
+    d1 = fixed_shrk_ds.iloc[:, :]
+    pf_std_val = d1.values[np.arange(d1.shape[0]), val_preds]
+    pf_opt_shrk = opt_preds_ds["pf_std"]
+
+    return pf_std_val.mean(), pf_opt_shrk.mean(), pf_std_val.std(), pf_opt_shrk.std()
 
 def f_map(idx):
     """

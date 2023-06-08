@@ -220,6 +220,8 @@ def train_manual():
 
 
             print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(validation_loss)}, {np.std(validation_loss)}")
+            print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
+
             y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
             if epoch == 5:
                 print("done ")

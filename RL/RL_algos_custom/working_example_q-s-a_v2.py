@@ -24,7 +24,9 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 """
-Now, additionally use regularization (i.e. dropout) to improve generalization performance
+THIS ARE ACTUALLY 2 VERSION: ONCE THE LABELS ARE NORMALIZED IN DATASET --> SEE COMMENTS
+ONCE THEY ARE NOT
+
 """
 
 

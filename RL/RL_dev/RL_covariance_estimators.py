@@ -63,6 +63,3 @@ def get_shrinkage_cov1Para(X, k=None):
 
     return shrinkage, target
 
-
-def get_shrinkage_identity(X):
-    pass

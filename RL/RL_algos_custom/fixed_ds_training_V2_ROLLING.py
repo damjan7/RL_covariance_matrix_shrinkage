@@ -24,7 +24,8 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 """
-Now, additionally use regularization (i.e. dropout) to improve generalization performance
+update the window on a rolling window
+
 """
 
 
@@ -85,20 +86,31 @@ class ActorCritic(nn.Module):
 
 # TRAIN LOOP
 def train_manual():
+
+    train_indices = (0, int(factors.shape[0] * 0.7))
+    val_indices = (int(factors.shape[0] * 0.7), factors.shape[0])
+
+
     for epoch in range(1, num_epochs+1):
         epoch_loss=[]
-        for i in range(factors.shape[0]):
+        validation_loss = []
+        val_preds = []
+        actual_argmin_validationset = []
+        train_pf_std = []
+        train_preds = []
+
+        for i in range(train_indices[1]):
             inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
             out = net(inp.view(1, -1))
             # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
             labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
+            train_preds.append(torch.argmin(out).item())
 
             # CALC LOSS AND BACKPROPAGATE
             optimizer.zero_grad()
             loss = criterion(out, labels)
             loss.backward()
             optimizer.step()
-
             epoch_loss.append(loss.item())
 
         # end of epoch statistics
@@ -107,8 +119,59 @@ def train_manual():
              print("break :-)")
 
         # validate at end of each epoch
+        net.eval()
+        stored_outputs = []
+        stored_labels = []
+        epoch_val_loss = []
+        with torch.no_grad():
+            for i in range(val_indices[0], val_indices[1]):  # starting from point datapoint 21, will update network
+                inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
+                out = net(inp.view(1, -1))
+                labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
 
-#train_manual()
+                val_preds.append(torch.argmin(out).item())  # get action
+                loss = criterion(out, labels)
+                epoch_val_loss.append(loss.item())
+
+                # store labels and output to update
+                stored_labels.append(labels)
+                stored_outputs.append(out)
+                if i>=21: # we are enough in the future so we can update the network with data from val set (incrementally)
+                    with torch.enable_grad():
+                        optimizer.zero_grad()
+                        loss = criterion(stored_labels[i-21], stored_outputs[i-21])
+                        loss.backward()
+                        optimizer.step()
+
+
+            # END OF VALIDATION: CALCULATE LOSS METRICS AND PRINT THEM
+
+            # print mean and sd of val loss
+            print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
+            # set model back into train mode
+
+            pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(
+                val_preds,
+                optimal_shrk_data.iloc[val_indices[0]:val_indices[1], :],
+                fixed_shrk_data.iloc[val_indices[0]:val_indices[1], :]
+            )
+
+            print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
+                  f"Validation pf std with shrkges chosen by cov1para: {pfstd2}")
+            print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
+            print(f"Validation sd of pf std's [cov1para]: ", pfstd2_sd)
+            print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
+            print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
+
+
+            y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
+            if epoch == 5:
+                print("done ")
+            mapped_val_preds = list(map(eval_funcs.f2_map, val_preds))
+            # eval_funcs.myplot(y2, mapped_val_preds)
+            net.train()
+
+
 
 ##### IMPLEMENTATION WITH DATALOADER
 
@@ -132,12 +195,10 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # inputs multiplied by 100 works better
         inp = torch.Tensor(np.append(self.factors.iloc[idx, :].values, self.optimal_shrk_data.iloc[idx, 1])) * 100
-
-        #labels = np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float)
-        #labels = StandardScaler().fit_transform(labels.reshape(-1, 1))
-        #labels = torch.Tensor(labels).squeeze()
-
-        labels = torch.Tensor(np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float))
+        labels = np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float)
+        labels = StandardScaler().fit_transform(labels.reshape(-1, 1))
+        labels = torch.Tensor(labels).squeeze()
+        #labels = torch.Tensor(np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float))
         # for labels: .view(1, -1) not needed when working with Dataset and DataLoader
         return inp, labels
 
@@ -198,7 +259,6 @@ def train_with_dataloader(normalize=False):
             # calc validation loss
 
         # log at end of epoch
-        wandb.log({"train loss": np.mean(epoch_loss)})
 
         # validate at end of epoch
         # set model into evaluation mode and deactivate gradient collection
@@ -220,7 +280,6 @@ def train_with_dataloader(normalize=False):
             # set model back into train mode
 
             # log the val loss
-            wandb.log({"val loss": np.mean(epoch_val_loss)})
 
             # return mean pf std of opt shrk estimator and shrk estimators chosen by my network
             pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(val_preds,
@@ -234,20 +293,8 @@ def train_with_dataloader(normalize=False):
             print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
             print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
-            # log the pf std with shriges chosen by network vs by classical optimizer
-            wandb.log({
-                "pf sd - network estimator": pfstd1,
-                "pf sd - closed form estimator": pfstd2
-            })
-
-            # map predictions from 1 to 21 to shrinkage intensities
-            #mapped_shrkges = list(map(eval_funcs.f_map, val_preds))
             mapped_shrkges = list(map(eval_funcs.f2_map, val_preds))
-            #wandb.log({
-            #    "closed form shrinkages": val_dataset.optimal_shrk_data["shrk_factor"].values,
-            #    "network shrinkages": mapped_shrkges
-            # also plot argmin shrkg
-            #})
+
 
             #eval_funcs.simple_plot(val_preds, actual_argmin_validationset)
             #eval_funcs.simple_plot(val_preds, optimal_shrk_data["shrk_factor"], map1=True, map2=True)
@@ -285,33 +332,10 @@ optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
 criterion = nn.MSELoss()
 
 
-wandb.login()
-
-run = wandb.init(
-    project="fixed-ds-testing",
-    entity="damjan-thesis",
-    config={
-        "architecture": net,
-        "epochs": num_epochs,
-        "learning_rate": lr,
-        "hidden_layer_size": hidden_layer_size,
-    }
-
-)
 
 train_with_dataloader(normalize=False)
 
+train_manual()
+
 print("done")
-
-
-def myplot(*args):
-    fig = plt.figure()
-    ax = plt.axes()
-    x = np.arange(len(args[0]))
-    for arg in args:
-        ax.plot(x, arg)
-    plt.legend()
-    plt.show()
-
-myplot(val_dataset.optimal_shrk_data["shrk_factor"].values.tolist(), mapped_shrkges)
 
