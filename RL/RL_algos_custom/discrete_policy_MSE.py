@@ -35,9 +35,14 @@ in this case we need no normalization of the labels
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
 pf_size = 100
-with open(rf"{shrk_data_path}\fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
+
+####################33
+# CHANGE ESTIMATOR NAME DEPENDING ON WHICH ONE I WANT TO USE
+estimator_name = 'cov2Para'
+
+with open(rf"{shrk_data_path}\{estimator_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\factor-1.0_p{pf_size}.pickle", 'rb') as f:
+with open(rf"{shrk_data_path}\{estimator_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
 
 
@@ -168,7 +173,7 @@ def train_manual():
                 actual_argmin_validationset.append(actual_min_action)
 
 
-            pfstd1, pfstd2 = eval_funcs.evaluate_preds(
+            pfstd1, pfstd2, _, _ = eval_funcs.evaluate_preds(
                 val_preds,
                 optimal_shrk_data.iloc[val_indices[0]:val_indices[1], :],
                 fixed_shrk_data.iloc[val_indices[0]:val_indices[1], :]

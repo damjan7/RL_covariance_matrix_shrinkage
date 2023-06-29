@@ -57,7 +57,7 @@ out_of_sample_period_length = -99
 pf_size = 100  # [30, 50, 100, 225, 500]
 return_data_path1 = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets"
 return_data_path2 = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
-estimator = estimators.get_cov1Para
+estimator = estimators.cov1Para
 
 # in_path = None, if the necessary matrices already exist
 create_fixed_shrk_datasets(path=in_path,

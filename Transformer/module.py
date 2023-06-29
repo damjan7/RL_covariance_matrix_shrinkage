@@ -97,15 +97,15 @@ class TimeSeriesTransformerEncoder(nn.Module):
         dec_seq_len: int,
         batch_first: bool,
         out_seq_len: int=58,
-        dim_val: int=512,
+        dim_val: int=64,
         n_encoder_layers: int=4,
         n_decoder_layers: int=4,
         n_heads: int=8,
         dropout_encoder: float=0.2,
         dropout_decoder: float=0.2,
         dropout_pos_enc: float=0.1,
-        dim_feedforward_encoder: int=2048,
-        dim_feedforward_decoder: int=2048,
+        dim_feedforward_encoder: int=128,
+        dim_feedforward_decoder: int=128,
         num_predicted_features: int=1
         ):
 
@@ -220,11 +220,18 @@ class TimeSeriesTransformerEncoder(nn.Module):
 
         return src
 
+import pandas as pd
+import numpy as np
 
 t1 = TimeSeriesTransformerEncoder(input_size=30, dec_seq_len=30, batch_first=False)
-base_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
-with open(rf"{base_path}\past_return_matrices_p30.pickle", 'rb') as f:
-    past_ret_matrices = pickle.load(f)
+factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
+factors = pd.read_csv(factor_path + "/all_factors.csv")
+factors = factors.pivot(index="date", columns="name", values="ret")
+start_date = '1980-01-15'
+start_idx = np.where(factors.index == start_date)[0][0]
+factors = factors.iloc[start_idx:start_idx+11000, :]
+
+
 
 
 print("done")

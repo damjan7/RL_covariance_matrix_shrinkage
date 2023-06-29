@@ -34,10 +34,26 @@ Now, additionally use regularization (i.e. dropout) to improve generalization pe
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
 pf_size = 100
-with open(rf"{shrk_data_path}\fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
+# currently fixed_shrkges_.. is the dataset with cov1_para, may change this
+
+fixed_shrk_name = 'cov2Para'
+opt_shrk_name = 'cov2Para'
+
+with open(rf"{shrk_data_path}\{fixed_shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\factor-1.0_p{pf_size}.pickle", 'rb') as f:
+with open(rf"{shrk_data_path}\{opt_shrk_name}_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
+
+# load the other optimal estimators for plotting purposes
+with open(rf"{shrk_data_path}\cov1para_factor-1.0_p{pf_size}.pickle", 'rb') as f:
+    cov1para = pickle.load(f)
+
+with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\covDiag_p100.pickle", 'rb') as f:
+    covdiag_p100 = pickle.load(f)
+
+with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\covCor_p100.pickle", 'rb') as f:
+    covcor_p100 = pickle.load(f)
+
 
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
 factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
@@ -228,9 +244,9 @@ def train_with_dataloader(normalize=False):
                                                        val_dataset.fixed_shrk_data)
 
             print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
-                  f"Validation pf std with shrkges chosen by cov1para: {pfstd2}")
+                  f"Validation pf std with shrkges chosen by {opt_shrk_name}: {pfstd2}")
             print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
-            print(f"Validation sd of pf std's [cov1para]: ", pfstd2_sd)
+            print(f"Validation sd of pf std's {opt_shrk_name}: ", pfstd2_sd)
             print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
             print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
@@ -254,8 +270,28 @@ def train_with_dataloader(normalize=False):
             act_argmin_shrgks = list(map(eval_funcs.f2_map, actual_argmin_validationset))
             y2 = val_dataset.optimal_shrk_data["shrk_factor"].values.tolist()
 
+            cov1para_val_ds = cov1para.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
             # eval_funcs.myplot(mapped_shrkges, y2)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
+
+            # plot pf stds
+            pf_sds_network = eval_funcs.get_pf_sds_daily(val_preds, val_dataset.fixed_shrk_data).tolist()
+            pf_sds_opt = val_dataset.optimal_shrk_data['pf_std'].values.tolist()
+            pf_sds_covcor = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['pf_std'].values.tolist()
+            pf_sds_covdiag = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['pf_std'].values.tolist()
+            # eval_funcs.myplot(pf_sds_network, pf_sds_opt, pf_sds_covcor, pf_sds_covdiag)
+            print("mean pf sd's: {network, opt[cov2para], covcor, covdiag}: ",
+                  np.mean(pf_sds_network),
+                  np.mean(pf_sds_opt),
+                  np.mean(pf_sds_covcor),
+                  np.mean(pf_sds_covdiag),
+                  )
+
+
 
             '''
             eval_funcs.myplot(val_dataset.factors.iloc[:, 0].tolist(), val_dataset.factors.iloc[:, 1].tolist(), 
@@ -268,7 +304,9 @@ def train_with_dataloader(normalize=False):
             val_ds = fixed_shrk_data.iloc[val_indices[0]:val_indices[1], 2:]
 
             if epoch == 5:
-                 print("F")
+                print("f1")
+            elif epoch == 10:
+                print("f2")
 
 
         net.train()

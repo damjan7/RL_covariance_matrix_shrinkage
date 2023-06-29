@@ -24,9 +24,10 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 """
-THIS CONTAINS ACTUALLY 2 VERSIONS: ONCE THE LABELS ARE NORMALIZED IN DATASET --> SEE COMMENTS
-ONCE THEY ARE NOT
+This file is more or less the same as V3 but will try some loss tuning
 
+For example; also penalize if my shrinkage intensity is too far from the shrinkage intensity chosen by
+the chosen model (i.e. cov2para)
 """
 
 
@@ -36,14 +37,19 @@ ONCE THEY ARE NOT
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
 pf_size = 100
+# currently fixed_shrkges_.. is the dataset with cov1_para, may change this
 
-fixed_shrk_name = 'cov2para'
-opt_shrk_name = 'cov2para'
+fixed_shrk_name = 'cov2Para'
+opt_shrk_name = 'cov2Para'
 
 with open(rf"{shrk_data_path}\{fixed_shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\{opt_shrk_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
+with open(rf"{shrk_data_path}\{opt_shrk_name}_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
+
+# just used for plotting or something?
+with open(rf"{shrk_data_path}\cov1para_factor-1.0_p{pf_size}.pickle", 'rb') as f:
+    cov1para = pickle.load(f)
 
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
 factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
@@ -189,9 +195,14 @@ def train_with_dataloader(normalize=False):
             out_shrk = torch.argmin(out) / 100
             # CALC LOSS AND BACKPROPAGATE
             optimizer.zero_grad()
-            loss = criterion(out, labels)  # MSE between outputs of NN and pf std --> pf std can be interpreted
+            loss = criterion(out, labels)   # MSE between outputs of NN and pf std --> pf std can be interpreted
             # as value of taking action a in state s, hence want my network to learn this
+            #### THIS BELOW DOESNT MAKE SENSE AND DOESNT WORK
             # loss += criterion(out_shrk, opt_shrk)
+            # ADD something else to loss
+            # loss += criterion(out_shrk, opt_shrk) * 1e15 # just to check
+            #######
+
             loss.backward()
             optimizer.step()
             epoch_loss.append(loss.item())
@@ -234,9 +245,9 @@ def train_with_dataloader(normalize=False):
                                                        val_dataset.fixed_shrk_data)
 
             print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
-                  f"Validation pf std with shrkges chosen by cov1para: {pfstd2}")
+                  f"Validation pf std with shrkges chosen by {opt_shrk_name}: {pfstd2}")
             print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
-            print(f"Validation sd of pf std's [cov1para]: ", pfstd2_sd)
+            print(f"Validation sd of pf std's {opt_shrk_name}: ", pfstd2_sd)
             print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
             print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
@@ -260,8 +271,17 @@ def train_with_dataloader(normalize=False):
             act_argmin_shrgks = list(map(eval_funcs.f2_map, actual_argmin_validationset))
             y2 = val_dataset.optimal_shrk_data["shrk_factor"].values.tolist()
 
+            cov1para_val_ds = cov1para.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
             # eval_funcs.myplot(mapped_shrkges, y2)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
+
+            # plot pf stds
+            # pf_sds_network = eval_funcs.get_pf_sds_daily(val_preds, val_dataset.fixed_shrk_data).tolist()
+            # pf_sds_opt = val_dataset.optimal_shrk_data['pf_std'].values.tolist()
+            # eval_funcs.myplot(pf_sds_network, pf_sds_opt)
+
+
 
             '''
             eval_funcs.myplot(val_dataset.factors.iloc[:, 0].tolist(), val_dataset.factors.iloc[:, 1].tolist(), 
@@ -274,7 +294,9 @@ def train_with_dataloader(normalize=False):
             val_ds = fixed_shrk_data.iloc[val_indices[0]:val_indices[1], 2:]
 
             if epoch == 5:
-                 print("F")
+                 print("f1")
+            elif epoch == 10:
+                print("f2")
 
 
         net.train()

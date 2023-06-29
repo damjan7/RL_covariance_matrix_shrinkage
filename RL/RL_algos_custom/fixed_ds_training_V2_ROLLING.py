@@ -123,53 +123,54 @@ def train_manual():
         stored_outputs = []
         stored_labels = []
         epoch_val_loss = []
-        with torch.no_grad():
-            for i in range(val_indices[0], val_indices[1]):  # starting from point datapoint 21, will update network
-                inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
-                out = net(inp.view(1, -1))
-                labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
+        # NO TORCH.NO_GRAD() NOW, AS I NEED THE GRADIENTS...
+        for i in range(val_indices[0], val_indices[1]):  # starting from point datapoint 21, will update network
+            inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
+            out = net(inp.view(1, -1))
+            labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
 
-                val_preds.append(torch.argmin(out).item())  # get action
-                loss = criterion(out, labels)
-                epoch_val_loss.append(loss.item())
+            val_preds.append(torch.argmin(out).item())  # get action
+            loss = criterion(out, labels)
+            epoch_val_loss.append(loss.item())
 
-                # store labels and output to update
-                stored_labels.append(labels)
-                stored_outputs.append(out)
-                if i>=21: # we are enough in the future so we can update the network with data from val set (incrementally)
-                    with torch.enable_grad():
-                        optimizer.zero_grad()
-                        loss = criterion(stored_labels[i-21], stored_outputs[i-21])
-                        loss.backward()
-                        optimizer.step()
+            # store labels and output to update
+            stored_labels.append(labels)
+            stored_outputs.append(out)
+            if i >= (val_indices[0] + 21): # we are enough in the future so we can update the network with data from val set (incrementally)
+                net.train()
+                optimizer.zero_grad()
+                loss = criterion(stored_labels[i-21-val_indices[0]], stored_outputs[i-21-val_indices[0]])
+                loss.backward()
+                optimizer.step()
+                net.eval()
 
 
-            # END OF VALIDATION: CALCULATE LOSS METRICS AND PRINT THEM
+        # END OF VALIDATION: CALCULATE LOSS METRICS AND PRINT THEM
 
-            # print mean and sd of val loss
-            print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
-            # set model back into train mode
+        # print mean and sd of val loss
+        print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
+        # set model back into train mode
 
-            pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(
+        pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(
                 val_preds,
                 optimal_shrk_data.iloc[val_indices[0]:val_indices[1], :],
                 fixed_shrk_data.iloc[val_indices[0]:val_indices[1], :]
-            )
+        )
 
-            print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
+        print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
                   f"Validation pf std with shrkges chosen by cov1para: {pfstd2}")
-            print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
-            print(f"Validation sd of pf std's [cov1para]: ", pfstd2_sd)
-            print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
-            print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
+        print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
+        print(f"Validation sd of pf std's [cov1para]: ", pfstd2_sd)
+        print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
+        print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
 
-            y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
-            if epoch == 5:
-                print("done ")
-            mapped_val_preds = list(map(eval_funcs.f2_map, val_preds))
-            # eval_funcs.myplot(y2, mapped_val_preds)
-            net.train()
+        y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
+        if epoch == 5:
+            print("done")
+        mapped_val_preds = list(map(eval_funcs.f2_map, val_preds))
+        # eval_funcs.myplot(y2, mapped_val_preds)
+        net.train()
 
 
 
@@ -333,7 +334,7 @@ criterion = nn.MSELoss()
 
 
 
-train_with_dataloader(normalize=False)
+# train_with_dataloader(normalize=False)
 
 train_manual()
 

@@ -99,7 +99,9 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     # now using past return matrices, calculate shrinkage intensity using some estimators
     # also calculate pf std's using the "optimal" shrinkage intensity and the others from the list
     num_inensities = 11  # num shrinkage intensities considered
-    shrk_factors = np.round(np.linspace(0, 2, 11), 3)
+
+    #only 1 as I do not consider more
+    shrk_factors = [1.0]
     # loop through all factors and the past data
     # can add everything to 1 data
     for factor in shrk_factors:
@@ -118,13 +120,14 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
         df = pd.DataFrame(res)
         df.columns = df.iloc[0, :]
         df = df.drop(0)
-        with open(rf"{out_path_shrk}\factor-{factor}_p{p}.pickle", 'wb') as pickle_file:
+        with open(rf"{out_path_shrk}\{estimator.__name__}_factor-{factor}_p{p}.pickle", 'wb') as pickle_file:
             pickle.dump(df, pickle_file)
 
     """
     Below: just 10 shrk intensities from 0.1 to 0.9 to have a general overview what good shrk intensities are
     """
-    shrk_intensities_v2 = np.round(np.linspace(0, 1, 21), 2)
+
+    shrk_intensities_v2 = np.round(np.linspace(0, 1, 101), 2)
     colnames = list(shrk_intensities_v2.astype(str))
     res = [["date", "hist_vola"] + colnames]
     for idx, past_return_matrix in enumerate(past_return_matrices):
@@ -145,7 +148,7 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     df = pd.DataFrame(res)
     df.columns = df.iloc[0, :]
     df = df.drop(0)
-    with open(rf"{out_path_shrk}\fixed_shrkges_p{p}.pickle", 'wb') as pickle_file:
+    with open(rf"{out_path_shrk}\{estimator.__name__}_fixed_shrkges_p{p}.pickle", 'wb') as pickle_file:
         pickle.dump(df, pickle_file)
 
 
@@ -158,10 +161,13 @@ out_of_sample_period_length = -99
 pf_size = 100  # [30, 50, 100, 225, 500]
 return_data_path1 = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets"
 return_data_path2 = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
-estimator = estimators.get_cov1Para
+
+# CHANGE ESTIMATOR DEPENDING ON WHAT WE WANT
+estimator = estimators.cov1Para
+estimator = estimators.cov2Para
 
 # in_path = None, if the necessary matrices already exist
-create_data_matrices(path=in_path,
+create_data_matrices(path=None,
                      end_date=end_date,
                      p=pf_size,
                      out_pf_sample_period_length=out_of_sample_period_length,

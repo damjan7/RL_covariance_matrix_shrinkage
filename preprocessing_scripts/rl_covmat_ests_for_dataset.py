@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import math
 
-def get_cov1Para(X, k=None):
+def cov1Para(X, k=None):
 
     N, p = X.shape # sample size and matrix dimension
     # default setting
@@ -42,20 +42,184 @@ def get_cov1Para(X, k=None):
 
 
 
-# function sigmahat=QIS(Y,k)
-#
-# Y (N*p): raw data matrix of N iid observations on p random variables
-# sigmahat (p*p): invertible covariance matrix estimator
-#
-# Implements the quadratic-inverse shrinkage (QIS) estimator
-#    This is a nonlinear shrinkage estimator derived under the Frobenius loss
-#    and its two cousins, Inverse Stein's loss and Mininum Variance loss
-#
-# If the second (optional) parameter k is absent, not-a-number, or empty,
-# then the algorithm demeans the data by default, and adjusts the effective
-# sample size accordingly. If the user inputs k = 0, then no demeaning
-# takes place; if (s)he inputs k = 1, then it signifies that the data Y has
-# already been demeaned.
+def cov2Para(Y,k = None):
+
+    import numpy as np
+    import pandas as pd
+    import math
+
+    # de-mean returns if required
+    N,p = Y.shape                      # sample size and matrix dimension
+
+
+    #default setting
+    if k is None or math.isnan(k):
+        mean = Y.mean(axis=0)
+        k = 1
+
+    #vars
+    n = N-k                                    # adjust effective sample size
+
+    #Cov df: sample covariance matrix
+    sample = pd.DataFrame(np.matmul(Y.T.to_numpy(),Y.to_numpy()))/n
+
+
+    #compute shrinkage target
+    diag = np.diag(sample.to_numpy())
+    meanvar= sum(diag)/len(diag)
+    meancov = (np.sum(sample.to_numpy()) - np.sum(np.eye(p)*sample.to_numpy()))/(p*(p-1));
+    target = pd.DataFrame(meanvar*np.eye(p)+meancov*(1-np.eye(p)))
+
+    #estimate the parameter that we call pi in Ledoit and Wolf (2003, JEF)
+    Y2 = pd.DataFrame(np.multiply(Y.to_numpy(),Y.to_numpy()))
+    sample2= pd.DataFrame(np.matmul(Y2.T.to_numpy(),Y2.to_numpy()))/n     # sample covariance matrix of squared returns
+    piMat=pd.DataFrame(sample2.to_numpy()-np.multiply(sample.to_numpy(),sample.to_numpy()))
+    pihat = sum(piMat.sum())
+
+    # estimate the parameter that we call gamma in Ledoit and Wolf (2003, JEF)
+    gammahat = np.linalg.norm(sample.to_numpy()-target,ord = 'fro')**2
+
+    # diagonal part of the parameter that we call rho
+    rho_diag = (sample2.sum().sum()-np.trace(sample.to_numpy())**2)/p;
+
+    # off-diagonal part of the parameter that we call rho
+    sum1=Y.sum(axis=1)
+    sum2=Y2.sum(axis=1)
+    temp = (np.multiply(sum1.to_numpy(),sum1.to_numpy())-sum2)
+    rho_off1 = np.sum(np.multiply(temp,temp))/(p*n)
+    rho_off2 = (sample.sum().sum()-np.trace(sample.to_numpy()))**2/p
+    rho_off = (rho_off1-rho_off2)/(p-1)
+
+    # compute shrinkage intensity
+    rhohat = rho_diag + rho_off
+    kappahat = (pihat-rhohat) / gammahat
+    shrinkage = max(0 , min(1 , kappahat/n))
+
+    # compute shrinkage estimator
+    sigmahat=shrinkage*target+(1-shrinkage)*sample
+
+    return shrinkage, sample, target
+
+
+
+def covCor(Y,k = None):
+
+    #Pre-Conditions: Y is a valid pd.dataframe and optional arg- k which can be
+    #    None, np.nan or int
+    #Post-Condition: Sigmahat dataframe is returned
+
+    import numpy as np
+    import numpy.matlib as mt
+    import pandas as pd
+    import math
+
+    # de-mean returns if required
+    N,p = Y.shape                      # sample size and matrix dimension
+
+
+    #default setting
+    if k is None or math.isnan(k):
+        mean = Y.mean(axis=0)
+        k = 1
+
+    #vars
+    n = N-k                                    # adjust effective sample size
+
+    #Cov df: sample covariance matrix
+    sample = pd.DataFrame(np.matmul(Y.T.to_numpy(),Y.to_numpy()))/n
+
+    # compute shrinkage target
+    samplevar = np.diag(sample.to_numpy())
+    sqrtvar = pd.DataFrame(np.sqrt(samplevar))
+    rBar = (np.sum(np.sum(sample.to_numpy()/np.matmul(sqrtvar.to_numpy(),sqrtvar.T.to_numpy())))-p)/(p*(p-1)) # mean correlation
+    target = pd.DataFrame(rBar*np.matmul(sqrtvar.to_numpy(),sqrtvar.T.to_numpy()))
+    target[np.logical_and(np.eye(p),np.eye(p))] = sample[np.logical_and(np.eye(p),np.eye(p))];
+
+    # estimate the parameter that we call pi in Ledoit and Wolf (2003, JEF)
+    Y2 = pd.DataFrame(np.multiply(Y.to_numpy(),Y.to_numpy()))
+    sample2= pd.DataFrame(np.matmul(Y2.T.to_numpy(),Y2.to_numpy()))/n     # sample covariance matrix of squared returns
+    piMat=pd.DataFrame(sample2.to_numpy()-np.multiply(sample.to_numpy(),sample.to_numpy()))
+    pihat = sum(piMat.sum())
+
+    # estimate the parameter that we call gamma in Ledoit and Wolf (2003, JEF)
+    gammahat = np.linalg.norm(sample.to_numpy()-target,ord = 'fro')**2
+
+    # diagonal part of the parameter that we call rho
+    rho_diag =  np.sum(np.diag(piMat))
+
+    # off-diagonal part of the parameter that we call rho
+    term1 = pd.DataFrame(np.matmul((Y**3).T.to_numpy(),Y.to_numpy())/n)
+    term2 = pd.DataFrame(np.transpose(mt.repmat(samplevar,p,1))*sample)
+    thetaMat = term1-term2
+    thetaMat[np.logical_and(np.eye(p),np.eye(p))] = pd.DataFrame(np.zeros((p,p)))[np.logical_and(np.eye(p),np.eye(p))]
+    rho_off = rBar*(np.matmul((1/sqrtvar).to_numpy(),sqrtvar.T.to_numpy())*thetaMat).sum().sum()
+
+    # compute shrinkage intensity
+    rhohat = rho_diag + rho_off
+    kappahat = (pihat - rhohat) / gammahat
+    shrinkage = max(0 , min(1 , kappahat/n))
+
+    # compute shrinkage estimator
+    sigmahat = shrinkage*target + (1-shrinkage) * sample
+
+    return shrinkage, sample, target
+
+
+
+def covDiag(Y,k = None):
+
+    #Pre-Conditions: Y is a valid pd.dataframe and optional arg- k which can be
+    #    None, np.nan or int
+    #Post-Condition: Sigmahat dataframe is returned
+
+    import numpy as np
+    import pandas as pd
+    import math
+
+    # de-mean returns if required
+    N,p = Y.shape                      # sample size and matrix dimension
+
+
+    #default setting
+    if k is None or math.isnan(k):
+
+        mean = Y.mean(axis=0)
+        k = 1
+
+    #vars
+    n = N-k                                    # adjust effective sample size
+
+    #Cov df: sample covariance matrix
+    sample = pd.DataFrame(np.matmul(Y.T.to_numpy(),Y.to_numpy()))/n
+
+    # compute shrinkage target
+    target = pd.DataFrame(np.diag(np.diag(sample.to_numpy())))
+
+    # estimate the parameter that we call pi in Ledoit and Wolf (2003, JEF)
+    Y2 = pd.DataFrame(np.multiply(Y.to_numpy(),Y.to_numpy()))
+    sample2= pd.DataFrame(np.matmul(Y2.T.to_numpy(),Y2.to_numpy()))/n     # sample covariance matrix of squared returns
+    piMat=pd.DataFrame(sample2.to_numpy()-np.multiply(sample.to_numpy(),sample.to_numpy()))
+    pihat = sum(piMat.sum())
+
+    # estimate the parameter that we call gamma in Ledoit and Wolf (2003, JEF)
+    gammahat = np.linalg.norm(sample.to_numpy()-target,ord = 'fro')**2
+
+    # diagonal part of the parameter that we call rho
+    rho_diag =  np.sum(np.diag(piMat))
+
+    # off-diagonal part of the parameter that we call rho
+    rho_off = 0
+
+    # compute shrinkage intensity
+    rhohat = rho_diag + rho_off
+    kappahat = (pihat - rhohat) / gammahat
+    shrinkage = max(0 , min(1 , kappahat/n))
+
+    # compute shrinkage estimator
+    sigmahat = shrinkage*target + (1-shrinkage) * sample
+
+    return shrinkage, sample, target
+
 
 def QIS(Y,k=None):
     #Pre-Conditions: Y is a valid pd.dataframe and optional arg- k which can be
