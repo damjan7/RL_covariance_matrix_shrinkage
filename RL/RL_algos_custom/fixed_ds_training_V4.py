@@ -24,15 +24,9 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 """
-This file is more or less the same as V3 but will try some loss tuning
-
-For example; also penalize if my shrinkage intensity is too far from the shrinkage intensity chosen by
-the chosen model (i.e. cov2para)
+Now, additionally use more inputs to the model and see what happens
 """
 
-
-##### CHECK IF THE DATES ACTUALLY CORRESPOND TO EACH OTHER!!!!!!!!!!!!!!!!!!!!!!!!!!
-# they do according to a QUICK MANUAL CHECK..
 
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
@@ -44,12 +38,21 @@ opt_shrk_name = 'cov2Para'
 
 with open(rf"{shrk_data_path}\{fixed_shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
+
 with open(rf"{shrk_data_path}\{opt_shrk_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
 
-# just used for plotting or something?
-with open(rf"{shrk_data_path}\cov1para_factor-1.0_p{100}.pickle", 'rb') as f:
+# load the other optimal estimators for plotting purposes
+#this is all for pf = 100
+with open(rf"{shrk_data_path}\cov1para_factor-1.0_p100.pickle", 'rb') as f:
     cov1para = pickle.load(f)
+
+with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\covDiag_p100.pickle", 'rb') as f:
+    covdiag_p100 = pickle.load(f)
+
+with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\covCor_p100.pickle", 'rb') as f:
+    covcor_p100 = pickle.load(f)
+
 
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
 factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
@@ -94,40 +97,12 @@ class ActorCritic(nn.Module):
 # first idea: for every data point, compare my state value estimates to the actual rewards
 
 
-
-# TRAIN LOOP
-def train_manual():
-    for epoch in range(1, num_epochs+1):
-        epoch_loss=[]
-        for i in range(factors.shape[0]):
-            inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
-            out = net(inp.view(1, -1))
-            # hacking solution --> need to solve the problem that cols/rows of my data are of dtype=object !
-            labels = torch.Tensor(np.array(fixed_shrk_data.iloc[i, 2:].values, dtype=float)).view(1, -1)
-
-            # CALC LOSS AND BACKPROPAGATE
-            optimizer.zero_grad()
-            loss = criterion(out, labels)
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss.append(loss.item())
-
-        # end of epoch statistics
-        print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
-        if epoch % 10 == 0:
-             print("break :-)")
-
-        # validate at end of each epoch
-
-#train_manual()
-
 ##### IMPLEMENTATION WITH DATALOADER
 
 
 class MyDataset(Dataset):
 
-    def __init__(self, factors, fixed_shrk_data, optimal_shrk_data, normalize=False):
+    def __init__(self, factors, fixed_shrk_data, optimal_shrk_data, cov1para, covcor, covdiag,  normalize=False):
         if normalize == True:  # for now only scale factors
             self.factors_scaler = MinMaxScaler()
             self.factors = pd.DataFrame(self.factors_scaler.fit_transform(factors))
@@ -135,15 +110,25 @@ class MyDataset(Dataset):
             self.factors = factors
         self.fixed_shrk_data = fixed_shrk_data
         self.optimal_shrk_data = optimal_shrk_data
+        self.cov1para = cov1para
+        self.covcor = covcor
+        self.covdiag = covdiag
         print("loaded")
-
 
     def __len__(self):
         return self.factors.shape[0]
 
     def __getitem__(self, idx):
         # inputs multiplied by 100 works better
-        inp = torch.Tensor(np.append(self.factors.iloc[idx, :].values, self.optimal_shrk_data.iloc[idx, 1])) * 100
+        inp = torch.Tensor(np.append(
+            self.factors.iloc[idx, :].values,
+            [
+            self.optimal_shrk_data.iloc[idx, 1],
+            self.cov1para.iloc[idx, 1],
+            self.covcor.iloc[idx, 1],
+            self.covdiag.iloc[idx, 1]
+                ]
+        )) * 100
 
         #labels = np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float)
         #labels = StandardScaler().fit_transform(labels.reshape(-1, 1))
@@ -163,6 +148,9 @@ def train_with_dataloader(normalize=False):
         factors.iloc[:len_train, :],
         fixed_shrk_data.iloc[:len_train, :],
         optimal_shrk_data.iloc[:len_train, :],
+        cov1para.iloc[:len_train, :],
+        covcor_p100.iloc[:len_train, :],
+        covdiag_p100.iloc[:len_train, :],
         normalize=normalize
     )
 
@@ -170,6 +158,9 @@ def train_with_dataloader(normalize=False):
         factors.iloc[len_train:, :],
         fixed_shrk_data.iloc[len_train:, :],
         optimal_shrk_data.iloc[len_train:, :],
+        cov1para.iloc[len_train:, :],
+        covcor_p100.iloc[len_train:, :],
+        covdiag_p100.iloc[len_train:, :],
         normalize=False,
     )
     if normalize == True:
@@ -195,14 +186,9 @@ def train_with_dataloader(normalize=False):
             out_shrk = torch.argmin(out) / 100
             # CALC LOSS AND BACKPROPAGATE
             optimizer.zero_grad()
-            loss = criterion(out, labels)   # MSE between outputs of NN and pf std --> pf std can be interpreted
+            loss = criterion(out, labels)  # MSE between outputs of NN and pf std --> pf std can be interpreted
             # as value of taking action a in state s, hence want my network to learn this
-            #### THIS BELOW DOESNT MAKE SENSE AND DOESNT WORK
             # loss += criterion(out_shrk, opt_shrk)
-            # ADD something else to loss
-            # loss += criterion(out_shrk, opt_shrk) * 1e15 # just to check
-            #######
-
             loss.backward()
             optimizer.step()
             epoch_loss.append(loss.item())
@@ -272,14 +258,25 @@ def train_with_dataloader(normalize=False):
             y2 = val_dataset.optimal_shrk_data["shrk_factor"].values.tolist()
 
             cov1para_val_ds = cov1para.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
             # eval_funcs.myplot(mapped_shrkges, y2)
             # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
 
             # plot pf stds
-            # pf_sds_network = eval_funcs.get_pf_sds_daily(val_preds, val_dataset.fixed_shrk_data).tolist()
-            # pf_sds_opt = val_dataset.optimal_shrk_data['pf_std'].values.tolist()
-            # eval_funcs.myplot(pf_sds_network, pf_sds_opt)
+            pf_sds_network = eval_funcs.get_pf_sds_daily(val_preds, val_dataset.fixed_shrk_data).tolist()
+            pf_sds_opt = val_dataset.optimal_shrk_data['pf_std'].values.tolist()
+            pf_sds_covcor = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['pf_std'].values.tolist()
+            pf_sds_covdiag = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['pf_std'].values.tolist()
+            # eval_funcs.myplot(pf_sds_network, pf_sds_opt, pf_sds_covcor, pf_sds_covdiag)
+            print("mean pf sd's: {network, opt[cov2para], covcor, covdiag}: ",
+                  np.mean(pf_sds_network),
+                  np.mean(pf_sds_opt),
+                  np.mean(pf_sds_covcor),
+                  np.mean(pf_sds_covdiag),
+                  )
 
 
 
@@ -294,7 +291,7 @@ def train_with_dataloader(normalize=False):
             val_ds = fixed_shrk_data.iloc[val_indices[0]:val_indices[1], 2:]
 
             if epoch == 5:
-                 print("f1")
+                print("f1")
             elif epoch == 10:
                 print("f2")
 
@@ -305,7 +302,7 @@ def train_with_dataloader(normalize=False):
 # PARAMETERS:
 num_epochs = 20
 lr = 1e-4
-num_features = factors.shape[1] + 1  # all 13 factors + opt shrk
+num_features = 17   # hard coded
 num_actions = fixed_shrk_data.shape[1] - 2  # since 1 col is dates, 1 col is hist vola
 hidden_layer_size = 128
 net = ActorCritic(num_features, num_actions, hidden_layer_size)

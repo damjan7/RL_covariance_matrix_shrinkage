@@ -33,7 +33,7 @@ Now, additionally use regularization (i.e. dropout) to improve generalization pe
 
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
-pf_size = 100
+pf_size = 225
 # currently fixed_shrkges_.. is the dataset with cov1_para, may change this
 
 fixed_shrk_name = 'cov2Para'
@@ -41,11 +41,13 @@ opt_shrk_name = 'cov2Para'
 
 with open(rf"{shrk_data_path}\{fixed_shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\{opt_shrk_name}_p{pf_size}.pickle", 'rb') as f:
+
+with open(rf"{shrk_data_path}\{opt_shrk_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
 
 # load the other optimal estimators for plotting purposes
-with open(rf"{shrk_data_path}\cov1para_factor-1.0_p{pf_size}.pickle", 'rb') as f:
+#this is all for pf = 100
+with open(rf"{shrk_data_path}\cov1para_factor-1.0_p100.pickle", 'rb') as f:
     cov1para = pickle.load(f)
 
 with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\covDiag_p100.pickle", 'rb') as f:
@@ -206,6 +208,7 @@ def train_with_dataloader(normalize=False):
             optimizer.step()
             epoch_loss.append(loss.item())
 
+        print(f"Epoch {epoch} training done.")
 
         # end of epoch statistics
         print(f"Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_loss)}, {np.std(epoch_loss)}")
@@ -274,7 +277,7 @@ def train_with_dataloader(normalize=False):
             covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
-            # eval_funcs.myplot(mapped_shrkges, y2)
+            # <<eval_funcs.myplot(mapped_shrkges, y2)>>
             # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
             # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
 

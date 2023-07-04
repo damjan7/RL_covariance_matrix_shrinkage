@@ -52,8 +52,8 @@ def create_benchmark_ds(out_path_dat, out_path_shrk, estimator, p):  # HERE QIS
 
 out_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
 out_path_shrk = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets"
-estimator = estimators.covCor
-pf_size=100
+estimator = estimators.cov1Para
+pf_size = 225
 
 
 create_benchmark_ds(out_path, out_path_shrk, estimator, p=pf_size)

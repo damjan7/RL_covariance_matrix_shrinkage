@@ -168,7 +168,7 @@ def train_manual():
                 actual_argmin_validationset.append(actual_min_action)
 
 
-            pfstd1, pfstd2 = eval_funcs.evaluate_preds(
+            pfstd1, pfstd2, _, _ = eval_funcs.evaluate_preds(
                 val_preds,
                 optimal_shrk_data.iloc[val_indices[0]:val_indices[1], :],
                 fixed_shrk_data.iloc[val_indices[0]:val_indices[1], :]
@@ -178,10 +178,12 @@ def train_manual():
             print(f"PF std epoch {epoch} [cov1para] (mean): {np.mean(pfstd2)}")
 
             y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
-            if epoch == 5:
-                print("done ")
             mapped_val_preds = list(map(eval_funcs.f2_map, val_preds))
             # eval_funcs.myplot(y2, mapped_val_preds)
+
+            if epoch == 5:
+                print("done ")
+
         net.train()
 
 

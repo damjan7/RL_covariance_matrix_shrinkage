@@ -46,10 +46,15 @@ but we sample policies from the network and according to them we update the netw
 
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
-pf_size = 100
-with open(rf"{shrk_data_path}\fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
+pf_size = 225
+
+
+fixed_shrk_name = 'cov2Para'
+opt_shrk_name = 'cov2Para'
+
+with open(rf"{shrk_data_path}\{fixed_shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\factor-1.0_p{pf_size}.pickle", 'rb') as f:
+with open(rf"{shrk_data_path}\{opt_shrk_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
 
 

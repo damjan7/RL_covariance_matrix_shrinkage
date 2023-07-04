@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 
 # for action probs
 from torch.distributions import Normal, Beta, LogNormal, Categorical
+import eval_funcs
 
 
 
@@ -34,7 +35,7 @@ in this case we need no normalization of the labels
 
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
-pf_size = 100
+pf_size = 225
 
 ####################33
 # CHANGE ESTIMATOR NAME DEPENDING ON WHICH ONE I WANT TO USE
@@ -135,10 +136,14 @@ def train_manual():
             a = str(round(action.item()/100, 2))
             pf_std = torch.tensor(fixed_shrk_data.iloc[i, :].loc[a])
 
-            loss = criterion(torch.min(labels)*100, pf_std*100)*1000
+            # loss calculated by mse of prediction and lowst posible pf std and also
+            # multiplied by probability of certain prediction acording to our model
+            loss = criterion(torch.min(labels)*100, pf_std*100)*10
 
             optimizer.zero_grad()
             log_prob = multinom_dist.log_prob(action)  # log prob of policy dist evaluated at sampled action
+
+            # TAKE AWAY MINUS
             loss = loss * log_prob  # like policy gradient  [reward * ]
             loss.backward()
             optimizer.step()
@@ -155,7 +160,7 @@ def train_manual():
         net.eval()
         with torch.no_grad():
             for i in range(val_indices[0], val_indices[1]):
-                inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
+                inp = torch.Tensor(np.append(factors.iloc[i, :].values*100, optimal_shrk_data.iloc[i, 1])) * 100
                 out = net(inp.view(1, -1))  # instead of q(s, a), out is now to be interpreted as action probs
 
                 # now just predict again by sampling? OR by argmax?
@@ -185,12 +190,32 @@ def train_manual():
             print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
             print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
+            #eval_funcs.simple_plot(val_preds, actual_argmin_validationset)
+            #eval_funcs.simple_plot(val_preds, optimal_shrk_data["shrk_factor"], map1=True, map2=True)
+            act_argmin_shrgks = list(map(eval_funcs.f2_map, actual_argmin_validationset))
+            y2 = optimal_shrk_data.iloc[val_indices[0]:val_indices[1], :]["shrk_factor"].values.tolist()
+
+            #cov1para_val_ds = cov1para.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            #covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+            #covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
+
+            mapped_shrkges = eval_funcs.mapped_shrkges = list(map(eval_funcs.f2_map, val_preds))
+
+            # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
+            # eval_funcs.myplot(mapped_shrkges, y2)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
+            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
+
             y2 = optimal_shrk_data['shrk_factor'].iloc[val_indices[0]:val_indices[1]].values.tolist()
-            if epoch == 5:
+            if epoch == 1:
                 print("done ")
-            mapped_val_preds = list(map(eval_funcs.f2_map, val_preds))
-            # eval_funcs.myplot(y2, mapped_val_preds)
-        net.train()
+            elif epoch == 3:
+                print("f2")
+            elif epoch == 5:
+                print("f")
+
+            # x
+            net.train()
 
 
 

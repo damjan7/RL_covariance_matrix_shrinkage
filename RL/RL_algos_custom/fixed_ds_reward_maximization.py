@@ -23,10 +23,13 @@ from RL.RL_algos_custom import eval_funcs
 
 # IMPORT SHRK DATASETS
 shrk_data_path = r'C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets'
-pf_size = 100
-with open(rf"{shrk_data_path}\fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
+pf_size = 225
+shrk_name = 'cov2Para'
+
+
+with open(rf"{shrk_data_path}\{shrk_name}_fixed_shrkges_p{pf_size}.pickle", 'rb') as f:
     fixed_shrk_data = pickle.load(f)
-with open(rf"{shrk_data_path}\factor-1.0_p{pf_size}.pickle", 'rb') as f:
+with open(rf"{shrk_data_path}\{shrk_name}_factor-1.0_p{pf_size}.pickle", 'rb') as f:
     optimal_shrk_data = pickle.load(f)
 
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
@@ -189,7 +192,7 @@ def train_with_dataloader():
             # set model back into train mode
 
             # return mean pf std of opt shrk estimator and shrk estimators chosen by my network
-            pfstd1, pfstd2 = eval_funcs.evaluate_preds(val_preds,
+            pfstd1, pfstd2, _, _ = eval_funcs.evaluate_preds(val_preds,
                                                        val_dataset.optimal_shrk_data,
                                                        val_dataset.fixed_shrk_data)
             print(f"pf std with shrkges chosen by network: {pfstd1} \n"
