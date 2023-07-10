@@ -1,5 +1,8 @@
-# will try to implement some easy variant of td learning
-# not sure if I will use my custom gym environment, as it is not really necessary
+
+############################
+# TRAINING WITHOUT SHRK INTENSITY AS INPUT!
+############################
+
 import wandb
 import pandas as pd
 import numpy as np
@@ -115,7 +118,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         # inputs multiplied by 100 works better
-        inp = torch.Tensor(np.append(self.factors.iloc[idx, :].values, self.optimal_shrk_data.iloc[idx, 1])) * 100
+        inp = torch.Tensor(self.factors.iloc[idx, :].values) * 100
 
         #labels = np.array(self.fixed_shrk_data.iloc[idx, 2:].values, dtype=float)
         #labels = StandardScaler().fit_transform(labels.reshape(-1, 1))
@@ -241,7 +244,7 @@ def train_with_dataloader(normalize=False):
             covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
             # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
-            # <<eval_funcs.myplot(mapped_shrkges, y2)>>
+            # eval_funcs.myplot(mapped_shrkges, y2)
             # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
             # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
 
@@ -258,8 +261,6 @@ def train_with_dataloader(normalize=False):
                   np.mean(pf_sds_covdiag),
                   )
 
-
-
             '''
             eval_funcs.myplot(val_dataset.factors.iloc[:, 0].tolist(), val_dataset.factors.iloc[:, 1].tolist(), 
                               val_dataset.factors.iloc[:, 2].tolist(), val_dataset.factors.iloc[:, 3].tolist(), 
@@ -274,8 +275,6 @@ def train_with_dataloader(normalize=False):
                 print("f1")
             elif epoch == 10:
                 print("f2")
-            elif epoch == 20:
-                print(f"f3")
 
 
         net.train()
@@ -284,7 +283,7 @@ def train_with_dataloader(normalize=False):
 # PARAMETERS:
 num_epochs = 20
 lr = 1e-4
-num_features = factors.shape[1] + 1  # all 13 factors + opt shrk
+num_features = factors.shape[1]   # all 13 factors
 num_actions = fixed_shrk_data.shape[1] - 2  # since 1 col is dates, 1 col is hist vola
 hidden_layer_size = 128
 net = ActorCritic(num_features, num_actions, hidden_layer_size)

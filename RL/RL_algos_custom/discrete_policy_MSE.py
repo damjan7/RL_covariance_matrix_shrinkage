@@ -138,7 +138,7 @@ def train_manual():
 
             # loss calculated by mse of prediction and lowst posible pf std and also
             # multiplied by probability of certain prediction acording to our model
-            loss = criterion(torch.min(labels)*100, pf_std*100)*10
+            loss = criterion(torch.min(labels)*100, pf_std*100)*100
 
             optimizer.zero_grad()
             log_prob = multinom_dist.log_prob(action)  # log prob of policy dist evaluated at sampled action
@@ -160,7 +160,7 @@ def train_manual():
         net.eval()
         with torch.no_grad():
             for i in range(val_indices[0], val_indices[1]):
-                inp = torch.Tensor(np.append(factors.iloc[i, :].values*100, optimal_shrk_data.iloc[i, 1])) * 100
+                inp = torch.Tensor(np.append(factors.iloc[i, :].values, optimal_shrk_data.iloc[i, 1])) * 100
                 out = net(inp.view(1, -1))  # instead of q(s, a), out is now to be interpreted as action probs
 
                 # now just predict again by sampling? OR by argmax?
@@ -216,10 +216,6 @@ def train_manual():
 
             # x
             net.train()
-
-
-
-
 
 
 
