@@ -21,6 +21,8 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
     rebalancing_days_full = hf_rl.get_full_rebalancing_dates_matrix(rebalancing_days)
     p_largest_stocks = hf_rl.get_p_largest_stocks_all_reb_dates_V2(df, rebalancing_days_full, p)
 
+    # [12490, 10401, 11850, 19553, 15966, 14541, 14357, 10604, 12060, 12079]
+
     # check if the "actual" rebalancing days are equal
     assert (rebalancing_days_full["actual_reb_day"].values == p_largest_stocks.index).all()
 
@@ -69,11 +71,11 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 ##### Let's call the function to create the necessary data frames
 
 in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
-end_date = 19901231
+end_date = 20220302
 estimation_window_length = -99
 out_of_sample_period_length = -99
-pf_size = 30  # [30, 50, 100, 225, 500]
-return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
+pf_size = 5  # [30, 50, 100, 225, 500]
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL\test"
 
 create_data_matrices(path=in_path,
                      end_date=end_date,

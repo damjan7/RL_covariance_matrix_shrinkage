@@ -22,12 +22,6 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 # X_scaled = X_std * (max - min) + min
 
 
-
-"""
-Now, additionally use regularization (i.e. dropout) to improve generalization performance
-"""
-
-
 ##### CHECK IF THE DATES ACTUALLY CORRESPOND TO EACH OTHER!!!!!!!!!!!!!!!!!!!!!!!!!!
 # they do according to a QUICK MANUAL CHECK..
 
@@ -66,18 +60,6 @@ with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_dataset
     qis_p225 = pickle.load(f)
 
 
-
-# for actual, correct validation, need the future and past return matrices as well as the rebalancing days
-with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\past_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    past_return_matrices = pickle.load(f)
-
-with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    future_return_matrices = pickle.load(f)
-
-with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\rebalancing_days_full.pickle", 'rb') as f:
-    rebalancing_days_full = pickle.load(f)
-
-
 # IMPORT FACTORS DATA AND PREPARE FOR FURTHER USE
 factor_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\factor_data"
 factors = pd.read_csv(factor_path + "/all_factors.csv")
@@ -87,6 +69,12 @@ factors = factors.pivot(index="date", columns="name", values="ret")
 start_date = '1980-01-15'
 start_idx = np.where(factors.index == start_date)[0][0]
 factors = factors.iloc[start_idx:start_idx+fixed_shrk_data.shape[0], :]
+
+scaler = StandardScaler()
+factors = pd.DataFrame(scaler.fit_transform(factors))
+
+scaler = StandardScaler()
+optimal_shrk_data.shrk_factor = scaler.fit_transform(np.reshape(optimal_shrk_data.shrk_factor.values, (-1, 1)))
 
 
 # Even for a simple TD-Learning method, we need an estimate of the Q(s,a) or V(s) function
@@ -151,7 +139,7 @@ def train_with_dataloader(normalize=False):
     # split dataset into train and validation
     batch_size = 16
     total_num_batches = factors.shape[0] // batch_size
-    len_train = int(total_num_batches * 0.45) * batch_size
+    len_train = int(total_num_batches * 0.7) * batch_size
     train_dataset = MyDataset(
         factors.iloc[:len_train, :],
         fixed_shrk_data.iloc[:len_train, :],
@@ -201,9 +189,6 @@ def train_with_dataloader(normalize=False):
             print("break :-)")
             # calc validation loss
 
-        # log at end of epoch
-        wandb.log({"train loss": np.mean(epoch_loss)})
-
         # validate at end of epoch
         # set model into evaluation mode and deactivate gradient collection
         net.eval()
@@ -223,9 +208,6 @@ def train_with_dataloader(normalize=False):
             print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
             # set model back into train mode
 
-            # log the val loss
-            wandb.log({"val loss": np.mean(epoch_val_loss)})
-
             # return mean pf std of opt shrk estimator and shrk estimators chosen by my network
             pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(val_preds,
                                                        val_dataset.optimal_shrk_data,
@@ -238,20 +220,7 @@ def train_with_dataloader(normalize=False):
             print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
             print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
 
-            # log the pf std with shriges chosen by network vs by classical optimizer
-            wandb.log({
-                "pf sd - network estimator": pfstd1,
-                "pf sd - closed form estimator": pfstd2
-            })
-
-            # map predictions from 1 to 21 to shrinkage intensities
-            #mapped_shrkges = list(map(eval_funcs.f_map, val_preds))
             mapped_shrkges = list(map(eval_funcs.f2_map, val_preds))
-            #wandb.log({
-            #    "closed form shrinkages": val_dataset.optimal_shrk_data["shrk_factor"].values,
-            #    "network shrinkages": mapped_shrkges
-            # also plot argmin shrkg
-            #})
 
             #eval_funcs.simple_plot(val_preds, actual_argmin_validationset)
             #eval_funcs.simple_plot(val_preds, optimal_shrk_data["shrk_factor"], map1=True, map2=True)
@@ -290,7 +259,7 @@ def train_with_dataloader(normalize=False):
                               val_dataset.factors.iloc[:, 5].tolist(), val_dataset.factors.iloc[:, 6].tolist(), 
                               val_dataset.factors.iloc[:, 7].tolist(), y2)
             '''
-            val_indices = (int(factors.shape[0] * 0.45), factors.shape[0])
+            val_indices = (int(factors.shape[0] * 0.7), factors.shape[0])
             val_ds = fixed_shrk_data.iloc[val_indices[0]:val_indices[1], 2:]
 
             val_indices = (4960, 8067)
@@ -304,8 +273,9 @@ def train_with_dataloader(normalize=False):
                 print(f"f3")
 
 
-
         path = rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
+
+        '''
         val_indices_correct = val_dataloader.dataset.optimal_shrk_data.index.values.tolist()
         val_indices_correct = val_indices_correct[0:-400]
         val_indices_correct = (4960, 8067)
@@ -320,6 +290,7 @@ def train_with_dataloader(normalize=False):
             reb_days = pickle.load(f)
 
         res = eval_funcs.temp_eval_fct(mapped_shrkges_v2, fut_ret_mats, past_ret_mats, reb_days, val_indices_results)
+        '''
         net.train()
 '''
 correct val indices
@@ -355,19 +326,6 @@ optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
 criterion = nn.MSELoss()
 
 
-wandb.login()
-
-run = wandb.init(
-    project="fixed-ds-testing",
-    entity="damjan-thesis",
-    config={
-        "architecture": net,
-        "epochs": num_epochs,
-        "learning_rate": lr,
-        "hidden_layer_size": hidden_layer_size,
-    }
-
-)
 
 train_with_dataloader(normalize=False)
 

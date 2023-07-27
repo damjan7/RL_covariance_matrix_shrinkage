@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import preprocessing_scripts.rl_covmat_ests_for_dataset as estimators
+from preprocessing_scripts import helper_functions as hf
+import pickle
 
 def evaluate_preds(val_preds, opt_preds_ds, fixed_shrk_ds):
     """
@@ -17,6 +20,152 @@ def evaluate_preds(val_preds, opt_preds_ds, fixed_shrk_ds):
     pf_opt_shrk = opt_preds_ds["pf_std"]
 
     return pf_std_val.mean(), pf_opt_shrk.mean(), pf_std_val.std(), pf_opt_shrk.std()
+
+def temp_eval_fct(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_indices):
+    weighted_rets_model = []
+    weighted_rets_cov2para = []
+    weighted_rets_qis = []
+    const_shrkg_02 = []
+    sample_covmat_only = []
+    const_shrkg_05 = []
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        model_covmat_est = 0.1 * target + (1-0.9) * sample #### HCANGE AGAIN
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        covmat_02 = 0.2*target + 0.8*sample
+        sample_covmat = sample
+        covmat_05 = 0.5*target + 0.5*sample
+        qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
+
+        weights_model = hf.calc_global_min_variance_pf(model_covmat_est)
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+        w_02 = hf.calc_global_min_variance_pf(covmat_02)
+        weights_sample = hf.calc_global_min_variance_pf(sample_covmat)
+        w_05 = hf.calc_global_min_variance_pf(covmat_05)
+
+        weighted_rets_model += list(fut_ret_mats[val_indices[i]] @ weights_model)
+        weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
+        weighted_rets_qis += list(fut_ret_mats[val_indices[i]] @ weights_qis)
+        const_shrkg_02 += list(fut_ret_mats[val_indices[i]] @ w_02)
+        sample_covmat_only += list(fut_ret_mats[val_indices[i]] @ weights_sample)
+        const_shrkg_05 += list(fut_ret_mats[val_indices[i]] @ w_05)
+
+    res = results = {
+        "network pf return" : round(np.mean(weighted_rets_model) * 252 * 100, 2) ,
+        "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
+        "qis pf return" : round(np.mean(weighted_rets_qis) * 252 * 100, 2) ,
+        "const 0.2 return": round(np.mean(const_shrkg_02) * 252 * 100, 2) ,
+        "sample covmat return": round(np.mean(sample_covmat_only) * 252 * 100, 2) ,
+        "const 0.5 return": round(np.mean(const_shrkg_05) * 252 * 100, 2) ,
+        "network pf sd" : round(np.std(weighted_rets_model) * np.sqrt(252) *100, 2) ,
+        "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
+        "qis pf sd" : round(np.std(weighted_rets_qis) * np.sqrt(252) *100, 2) ,
+        "const 0.2 sd": round(np.std(const_shrkg_02) * np.sqrt(252) *100, 2) ,
+        "sample covmat sd": round(np.std(sample_covmat_only) * np.sqrt(252) *100, 2) ,
+        "const 0.5 sd": round(np.std(const_shrkg_05) * np.sqrt(252) *100, 2) ,
+    }
+    return res
+
+def temp_eval_fct_TEST(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_indices):
+    weighted_rets_cov2para = pd.DataFrame()
+    weighted_rets_qis = []
+    sample_covmat_only = []
+    equal_pf = []
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
+
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+        weights_sample = hf.calc_global_min_variance_pf(sample)
+        weigths_equal_pf = np.array([1 / fut_ret_mats[0].shape[1] for _ in range(fut_ret_mats[0].shape[1])])
+
+        weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
+        weighted_rets_qis += list(fut_ret_mats[val_indices[i]] @ weights_qis)
+        sample_covmat_only += list(fut_ret_mats[val_indices[i]] @ weights_sample)
+        equal_pf += list(fut_ret_mats[val_indices[i]] @ weigths_equal_pf)
+
+
+    res = results = {
+        "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
+        "qis pf return" : round(np.mean(weighted_rets_qis) * 252 * 100, 2) ,
+        "sample covmat return": round(np.mean(sample_covmat_only) * 252 * 100, 2),
+        "equal pf return": round(np.mean(equal_pf) * 252 * 100, 2),
+        "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
+        "qis pf sd" : round(np.std(weighted_rets_qis) * np.sqrt(252) *100, 2) ,
+        "sample covmat sd": round(np.std(sample_covmat_only) * np.sqrt(252) *100, 2),
+        "equal pf sd": round(np.std(equal_pf) * np.sqrt(252) *100, 2)
+    }
+    return res
+
+def grid_eval_fixed_shrkges(fut_ret_mats, past_ret_mats, val_indices):
+    GRID = [round(0 + 0.1 * i, 2) for i in range(11)]
+    BASE_ESTIMATOR = estimators.cov1Para
+    returns = {}
+    sds = {}
+    for cur_shrkg in GRID:
+        cur_weighted_returns = []
+        for i in range(len(val_indices)):
+            shrk, sample, target = BASE_ESTIMATOR(past_ret_mats[val_indices[i]])
+            covmat = cur_shrkg * target + (1-cur_shrkg) * sample
+            weights = hf.calc_global_min_variance_pf(covmat)
+            cur_weighted_returns += list(fut_ret_mats[val_indices[i]] @ weights)
+        ret = round(np.mean(cur_weighted_returns) * 252 * 100, 2)
+        sd = round(np.std(cur_weighted_returns) * np.sqrt(252) * 100, 2)
+        returns[f'shrk = {cur_shrkg}'] = ret
+        sds[f'shrk = {cur_shrkg}'] = sd
+
+    return returns, sds
+
+
+def correct_validationset_evaluation(val_preds, pf_size):
+    """
+    correctly evaluates prediction, using average of all results annualized as performance measure,
+    as in estimation.py
+    """
+    # for actual, correct validation, need the future and past return matrices as well as the rebalancing days
+    with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\past_return_matrices_p{pf_size}.pickle", 'rb') as f:
+        past_return_matrices = pickle.load(f)
+
+    with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
+        fut_return_matrices = pickle.load(f)
+
+    with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\rebalancing_days_full.pickle", 'rb') as f:
+        reb_days = pickle.load(f)
+
+    model_shrkges = [num / 100 for num in val_preds]
+    weighted_rets_model = []
+    weighted_rets_cov2para = []
+    weighted_rets_qis = []
+    cov2para_shrkges = []
+    # calculate shrinkage target
+    for i in range(len(reb_days)):
+        shrk, sample, target = estimators.cov2Para(past_return_matrices[i])
+        model_covmat_est = model_shrkges[i] * target + (1-model_shrkges[i]) * sample
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        qis_covmat_est = estimators.QIS(past_return_matrices[i])
+        weights_model = hf.calc_global_min_variance_pf(model_covmat_est)
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+
+        weighted_rets_model.append(fut_return_matrices[i] @ weights_model)
+        weighted_rets_cov2para.append(fut_return_matrices[i] @ weights_cov2para)
+        weighted_rets_qis.append(fut_return_matrices[i] @ weights_qis)
+
+        cov2para_shrkges.append(shrk)
+
+    results = {
+        "network pf return" : np.mean(weighted_rets_model) * 252,
+        "cov2para pf return" : np.mean(weighted_rets_cov2para) * 252,
+        "qis pf return" : np.mean(weighted_rets_qis) * 252,
+        "network pf sd" : np.std(weighted_rets_model) * np.sqrt(252),
+        "cov2para pf sd" : np.std(weighted_rets_cov2para) * np.sqrt(252),
+        "qis pf sd" : np.std(weighted_rets_qis) * np.sqrt(252),
+    }
+    print('hehe')
+    return results, cov2para_shrkges
 
 def get_pf_sds_daily(shrinkage_intensities_as_int, fixed_shrk_ds):
     """
