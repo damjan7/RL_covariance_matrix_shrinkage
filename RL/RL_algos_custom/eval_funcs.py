@@ -25,47 +25,281 @@ def temp_eval_fct(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_indices)
     weighted_rets_model = []
     weighted_rets_cov2para = []
     weighted_rets_qis = []
-    const_shrkg_02 = []
     sample_covmat_only = []
-    const_shrkg_05 = []
     for i in range(len(val_indices)):
         shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
-        model_covmat_est = 0.1 * target + (1-0.9) * sample #### HCANGE AGAIN
+        model_covmat_est = val_preds[i] * target + (1-val_preds[i]) * sample
         cov2para_covmat_est = shrk * target + (1-shrk) * sample
-        covmat_02 = 0.2*target + 0.8*sample
         sample_covmat = sample
-        covmat_05 = 0.5*target + 0.5*sample
         qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
 
         weights_model = hf.calc_global_min_variance_pf(model_covmat_est)
         weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
         weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
-        w_02 = hf.calc_global_min_variance_pf(covmat_02)
         weights_sample = hf.calc_global_min_variance_pf(sample_covmat)
-        w_05 = hf.calc_global_min_variance_pf(covmat_05)
 
         weighted_rets_model += list(fut_ret_mats[val_indices[i]] @ weights_model)
         weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
         weighted_rets_qis += list(fut_ret_mats[val_indices[i]] @ weights_qis)
-        const_shrkg_02 += list(fut_ret_mats[val_indices[i]] @ w_02)
         sample_covmat_only += list(fut_ret_mats[val_indices[i]] @ weights_sample)
-        const_shrkg_05 += list(fut_ret_mats[val_indices[i]] @ w_05)
 
     res = results = {
         "network pf return" : round(np.mean(weighted_rets_model) * 252 * 100, 2) ,
         "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
         "qis pf return" : round(np.mean(weighted_rets_qis) * 252 * 100, 2) ,
-        "const 0.2 return": round(np.mean(const_shrkg_02) * 252 * 100, 2) ,
         "sample covmat return": round(np.mean(sample_covmat_only) * 252 * 100, 2) ,
-        "const 0.5 return": round(np.mean(const_shrkg_05) * 252 * 100, 2) ,
         "network pf sd" : round(np.std(weighted_rets_model) * np.sqrt(252) *100, 2) ,
         "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
         "qis pf sd" : round(np.std(weighted_rets_qis) * np.sqrt(252) *100, 2) ,
-        "const 0.2 sd": round(np.std(const_shrkg_02) * np.sqrt(252) *100, 2) ,
         "sample covmat sd": round(np.std(sample_covmat_only) * np.sqrt(252) *100, 2) ,
-        "const 0.5 sd": round(np.std(const_shrkg_05) * np.sqrt(252) *100, 2) ,
     }
     return res
+
+def eval_oos_final(fut_ret_mats, past_ret_mats, val_indices, ALPHA_COV2PARA):
+    weighted_rets_EW = []
+    weighted_rets_cov1para = []
+    weighted_rets_cov2para = []
+    weighted_rets_cov2para_mean_weight = []
+    weighted_rets_qis = []
+
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        cov2para_covmat_meanweight = ALPHA_COV2PARA * target + (1-ALPHA_COV2PARA) * sample
+
+        shrk, sample, target = estimators.cov1Para(past_ret_mats[val_indices[i]])
+        cov1para_covmat_est = shrk * target + (1-shrk) * sample
+        qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
+
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_cov1para = hf.calc_global_min_variance_pf(cov1para_covmat_est)
+        weigths_equal_pf = np.array([1 / fut_ret_mats[0].shape[1] for _ in range(fut_ret_mats[0].shape[1])])
+        weights_cov2para_meanweight = hf.calc_global_min_variance_pf(cov2para_covmat_meanweight)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+
+        weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
+        weighted_rets_cov1para += list(fut_ret_mats[val_indices[i]] @ weights_cov1para)
+        weighted_rets_EW += list(fut_ret_mats[val_indices[i]] @ weigths_equal_pf)
+        weighted_rets_cov2para_mean_weight += list(fut_ret_mats[val_indices[i]] @ weights_cov2para_meanweight)
+        weighted_rets_qis += list(fut_ret_mats[val_indices[i]] @ weights_qis)
+
+        AV = f"AV & {round(np.mean(weighted_rets_EW) * 252 * 100, 2)} & {round(np.mean(weighted_rets_cov1para) * 252 * 100, 2)}" \
+             f" & {round(np.mean(weighted_rets_cov2para) * 252 * 100, 2)} & {round(np.mean(weighted_rets_cov2para_mean_weight) * 252 * 100, 2)}" \
+             f" & {round(np.mean(weighted_rets_qis) * 252 * 100, 2)}"
+
+        SD = f"SD & {round(np.std(weighted_rets_EW) * np.sqrt(252) * 100, 2)} & {round(np.std(weighted_rets_cov1para) * np.sqrt(252) * 100, 2)}" \
+             f" & {round(np.std(weighted_rets_cov2para) * np.sqrt(252) * 100, 2)} & {round(np.std(weighted_rets_cov2para_mean_weight) * np.sqrt(252) * 100, 2)}" \
+             f" & {round(np.std(weighted_rets_qis) * np.sqrt(252) * 100, 2)}"
+
+        IR = f"IR & {round( (np.mean(weighted_rets_EW) * 252) / (np.std(weighted_rets_EW) * np.sqrt(252)), 2)} & " \
+             f"{round( (np.mean(weighted_rets_cov1para) * 252) / (np.std(weighted_rets_cov1para) * np.sqrt(252)), 2)} & " \
+             f"{round( (np.mean(weighted_rets_cov2para) * 252) / (np.std(weighted_rets_cov2para) * np.sqrt(252)), 2)} & " \
+             f"{round( (np.mean(weighted_rets_cov2para_mean_weight) * 252) / (np.std(weighted_rets_cov2para_mean_weight) * np.sqrt(252)), 2)} & " \
+             f"{round( (np.mean(weighted_rets_qis) * 252) / (np.std(weighted_rets_qis) * np.sqrt(252)) , 2)}"
+
+    res = results = {
+
+        "EW pf return": round(np.mean(weighted_rets_EW) * 252 * 100, 2),
+        "cov1para pf return": round(np.mean(weighted_rets_cov1para) * 252 * 100, 2),
+        "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
+        "cov2para (mean ALPHA) pf return": round(np.mean(weighted_rets_cov2para_mean_weight) * 252 * 100, 2),
+        "qis pf return" : round(np.mean(weighted_rets_qis) * 252 * 100, 2) ,
+
+        "EW pf sd": round(np.std(weighted_rets_EW) * np.sqrt(252) * 100, 2),
+        "cov1para pf sd": round(np.std(weighted_rets_cov1para) * np.sqrt(252) * 100, 2),
+        "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
+        "cov2para (mean ALPHA) pf sd" : round(np.std(weighted_rets_cov2para_mean_weight) * np.sqrt(252) *100, 2) ,
+        "qis pf sd" : round(np.std(weighted_rets_qis) * np.sqrt(252) *100, 2) ,
+    }
+    return (res, AV, SD, IR)
+
+
+def get_pf_metrics(fut_ret_mats, past_ret_mats, val_indices, ALPHA_COV2PARA):
+    weights_EW_full = []
+    weights_cov1para_full = []
+    weights_cov2para_full = []
+    weights_cov2para_mean_weight_full = []
+    weights_qis_full = []
+    permnos = []
+
+    weights_with_idx = []
+
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        cov2para_covmat_meanweight = ALPHA_COV2PARA * target + (1-ALPHA_COV2PARA) * sample
+
+        shrk, sample, target = estimators.cov1Para(past_ret_mats[val_indices[i]])
+        cov1para_covmat_est = shrk * target + (1-shrk) * sample
+        qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
+
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_cov1para = hf.calc_global_min_variance_pf(cov1para_covmat_est)
+        weights_equal_pf = np.array([1 / fut_ret_mats[0].shape[1] for _ in range(fut_ret_mats[0].shape[1])])
+        weights_cov2para_meanweight = hf.calc_global_min_variance_pf(cov2para_covmat_meanweight)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+
+        weights_cov2para_full.append(pd.DataFrame(weights_cov2para, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+        weights_cov1para_full.append(pd.DataFrame(weights_cov1para, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+        weights_EW_full.append(pd.DataFrame(weights_equal_pf, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+        weights_cov2para_mean_weight_full.append(pd.DataFrame(weights_cov2para_meanweight, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+        weights_qis_full.append(pd.DataFrame(weights_qis, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+
+    c2p = helper_pf_metrics(weights_cov2para_full, val_indices)
+    c1p = helper_pf_metrics(weights_cov1para_full, val_indices)
+    ew = helper_pf_metrics(weights_EW_full, val_indices)
+    c2p_mean = helper_pf_metrics(weights_cov2para_mean_weight_full, val_indices)
+    qis = helper_pf_metrics(weights_qis_full, val_indices)
+
+    TO = f"TO & {ew[0]} & {c1p[0]} & {c2p[0]} & {c2p_mean[0]} & {qis[0]}"
+    GL = f"GL & {ew[1]} & {c1p[1]} & {c2p[1]} & {c2p_mean[1]} & {qis[1]}"
+    PL = f"PL & {ew[2]} & {c1p[2]} & {c2p[2]} & {c2p_mean[2]} & {qis[2]}"
+
+    return (TO,GL,PL)
+
+
+def helper_pf_metrics(weights_with_idx, val_indices):
+    running_sum_turnover = 0
+    running_sum_gross_leverage = np.sum(np.abs(weights_with_idx[-1].values))
+    running_sum_prop_leverage = np.sum(weights_with_idx[-1].values < 0)
+    for i in range(len(val_indices) - 1):
+        df_tmp = pd.concat([weights_with_idx[i], weights_with_idx[i+1]], axis=1).fillna(0)
+        df_tmp.columns = ['col1', 'col2']
+        running_sum_turnover += np.sum(np.abs((df_tmp['col1'] - df_tmp['col2']).values))
+        running_sum_gross_leverage += np.sum(np.abs(weights_with_idx[i].values))
+        running_sum_prop_leverage += np.sum(weights_with_idx[i].values < 0)
+    running_sum_turnover = np.round(running_sum_turnover / (len(val_indices) - 1), 2)
+    running_sum_gross_leverage = np.round(running_sum_gross_leverage / len(val_indices), 2)
+    running_sum_prop_leverage = np.round(running_sum_prop_leverage / ( len(val_indices) * weights_with_idx[-1].shape[0]), 2)
+    return (running_sum_turnover, running_sum_gross_leverage, running_sum_prop_leverage)
+
+
+
+def grid_eval_fixed_shrkges(fut_ret_mats, past_ret_mats, val_indices):
+    GRID = [round(0 + 0.1 * i, 2) for i in range(11)]
+    BASE_ESTIMATOR = estimators.cov2Para
+    returns = {}
+    sds = {}
+    ret_str = f"AV & "
+    sds_str = f"SD & "
+    IR_str = f"IR & "
+    for cur_shrkg in GRID:
+        cur_weighted_returns = []
+        for i in range(len(val_indices)):
+            shrk, sample, target = BASE_ESTIMATOR(past_ret_mats[val_indices[i]])
+            covmat = cur_shrkg * target + (1-cur_shrkg) * sample
+            weights = hf.calc_global_min_variance_pf(covmat)
+            cur_weighted_returns += list(fut_ret_mats[val_indices[i]] @ weights)
+        ret = round(np.mean(cur_weighted_returns) * 252 * 100, 2)
+        sd = round(np.std(cur_weighted_returns) * np.sqrt(252) * 100, 2)
+        ir = round((np.mean(cur_weighted_returns) * 252) / (np.std(cur_weighted_returns) * np.sqrt(252)), 2)
+        returns[f'shrk = {cur_shrkg}'] = ret
+        sds[f'shrk = {cur_shrkg}'] = sd
+        ret_str += f"{ret} & "
+        sds_str += f"{sd} & "
+        IR_str += f"{ir} & "
+
+    return returns, sds, ret_str, sds_str, IR_str
+
+
+def grid_eval_fixed_shrkges_pf_metrics(fut_ret_mats, past_ret_mats, val_indices):
+    GRID = [round(0 + 0.1 * i, 2) for i in range(11)]
+    BASE_ESTIMATOR = estimators.cov2Para
+
+    TO = f"TO & "
+    GL = f"GL & "
+    PL = f"PL & "
+
+    #weights_cov2para_full.append(pd.DataFrame(weights_cov2para, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+    for cur_shrkg in GRID:
+        weights_matrix = []
+        for i in range(len(val_indices)):
+            shrk, sample, target = BASE_ESTIMATOR(past_ret_mats[val_indices[i]])
+            covmat = cur_shrkg * target + (1-cur_shrkg) * sample
+            weights = hf.calc_global_min_variance_pf(covmat)
+            weights_matrix.append(pd.DataFrame(weights, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+        res = helper_pf_metrics(weights_matrix, val_indices)
+        TO += f"{res[0]} & "
+        GL += f"{res[1]} & "
+        PL += f"{res[2]} & "
+    return (TO, GL, PL)
+
+def calc_pf_metrics_network_estimator(fut_ret_mats, past_ret_mats, shrkges, val_indices):
+    BASE_ESTIMATOR = estimators.cov2Para
+    TO = f"TO & "
+    GL = f"GL & "
+    PL = f"PL & "
+    weights_matrix = []
+    for i in range(len(val_indices)):
+        shrk, sample, target = BASE_ESTIMATOR(past_ret_mats[val_indices[i]])
+        covmat = shrkges[i] * target + (1-shrkges[i]) * sample
+        weights = hf.calc_global_min_variance_pf(covmat)
+        weights_matrix.append(pd.DataFrame(weights, index=fut_ret_mats[val_indices[i]].columns.tolist()))
+    res = helper_pf_metrics(weights_matrix, val_indices)
+    TO += f"{res[0]} & "
+    GL += f"{res[1]} & "
+    PL += f"{res[2]} & "
+    return (TO, GL, PL)
+
+def eval_cov1para_cov2para(fut_ret_mats, past_ret_mats, val_indices):
+    weighted_rets_cov1para = []
+    weighted_rets_cov2para = []
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+
+        shrk, sample, target = estimators.cov1Para(past_ret_mats[val_indices[i]])
+        cov1para_covmat_est = shrk * target + (1-shrk) * sample
+
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_cov1para = hf.calc_global_min_variance_pf(cov1para_covmat_est)
+
+        weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
+        weighted_rets_cov1para += list(fut_ret_mats[val_indices[i]] @ weights_cov1para)
+
+    res = results = {
+        "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
+        "cov1para pf return" : round(np.mean(weighted_rets_cov1para) * 252 * 100, 2) ,
+        "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
+        "cov1para pf sd" : round(np.std(weighted_rets_cov1para) * np.sqrt(252) *100, 2) ,
+    }
+    return res
+
+
+def temp_eval_fct_returns_TESTING(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_indices):
+    weighted_rets_model = []
+    weighted_rets_cov2para = []
+    weighted_rets_qis = []
+    sample_covmat_only = []
+    for i in range(len(val_indices)):
+        shrk, sample, target = estimators.cov2Para(past_ret_mats[val_indices[i]])
+        model_covmat_est = 0 * target + (1) * sample
+        cov2para_covmat_est = shrk * target + (1-shrk) * sample
+        sample_covmat = sample
+        qis_covmat_est = estimators.QIS(past_ret_mats[val_indices[i]])
+
+        weights_model = hf.calc_global_min_variance_pf(model_covmat_est)
+        weights_cov2para = hf.calc_global_min_variance_pf(cov2para_covmat_est)
+        weights_qis = hf.calc_global_min_variance_pf(qis_covmat_est)
+        weights_sample = hf.calc_global_min_variance_pf(sample_covmat)
+
+        weighted_rets_model += list(fut_ret_mats[val_indices[i]] @ weights_model)
+        weighted_rets_cov2para += list(fut_ret_mats[val_indices[i]] @ weights_cov2para)
+        weighted_rets_qis += list(fut_ret_mats[val_indices[i]] @ weights_qis)
+        sample_covmat_only += list(fut_ret_mats[val_indices[i]] @ weights_sample)
+
+    res = results = {
+        "network pf return" : round(np.mean(weighted_rets_model) * 252 * 100, 2) ,
+        "cov2para pf return" : round(np.mean(weighted_rets_cov2para) * 252 * 100, 2) ,
+        "qis pf return" : round(np.mean(weighted_rets_qis) * 252 * 100, 2) ,
+        "sample covmat return": round(np.mean(sample_covmat_only) * 252 * 100, 2) ,
+        "network pf sd" : round(np.std(weighted_rets_model) * np.sqrt(252) *100, 2) ,
+        "cov2para pf sd" : round(np.std(weighted_rets_cov2para) * np.sqrt(252) *100, 2) ,
+        "qis pf sd" : round(np.std(weighted_rets_qis) * np.sqrt(252) *100, 2) ,
+        "sample covmat sd": round(np.std(sample_covmat_only) * np.sqrt(252) *100, 2) ,
+    }
+    return res
+
 
 def temp_eval_fct_TEST(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_indices):
     weighted_rets_cov2para = pd.DataFrame()
@@ -99,25 +333,6 @@ def temp_eval_fct_TEST(val_preds, fut_ret_mats, past_ret_mats, reb_days, val_ind
         "equal pf sd": round(np.std(equal_pf) * np.sqrt(252) *100, 2)
     }
     return res
-
-def grid_eval_fixed_shrkges(fut_ret_mats, past_ret_mats, val_indices):
-    GRID = [round(0 + 0.1 * i, 2) for i in range(11)]
-    BASE_ESTIMATOR = estimators.cov1Para
-    returns = {}
-    sds = {}
-    for cur_shrkg in GRID:
-        cur_weighted_returns = []
-        for i in range(len(val_indices)):
-            shrk, sample, target = BASE_ESTIMATOR(past_ret_mats[val_indices[i]])
-            covmat = cur_shrkg * target + (1-cur_shrkg) * sample
-            weights = hf.calc_global_min_variance_pf(covmat)
-            cur_weighted_returns += list(fut_ret_mats[val_indices[i]] @ weights)
-        ret = round(np.mean(cur_weighted_returns) * 252 * 100, 2)
-        sd = round(np.std(cur_weighted_returns) * np.sqrt(252) * 100, 2)
-        returns[f'shrk = {cur_shrkg}'] = ret
-        sds[f'shrk = {cur_shrkg}'] = sd
-
-    return returns, sds
 
 
 def correct_validationset_evaluation(val_preds, pf_size):

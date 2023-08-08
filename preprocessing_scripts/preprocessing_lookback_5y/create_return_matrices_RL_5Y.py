@@ -1,5 +1,7 @@
-import helper_functions_RL as hf_rl
+import helper_funcs_RL_5Y as hf_rl
 import pickle
+import pandas as pd
+import numpy as np
 
 
 def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimation_window_length, out_path):
@@ -19,6 +21,13 @@ def create_data_matrices(path, end_date, p, out_pf_sample_period_length, estimat
 
     # returns just every trading day, hence no estimation window length is needed
     rebalancing_days_full = hf_rl.get_full_rebalancing_dates_matrix(rebalancing_days)
+    # Change from 1 year lookback to 5 years
+    actual_reb_days = rebalancing_days_full['actual_reb_day'].iloc[1008:].values
+    fut_reb_days = rebalancing_days_full['fut_reb_day'].iloc[1008:].values
+    prev_reb_days = rebalancing_days_full['prev_reb_day'].iloc[:-1008].values
+    rebalancing_days_full = pd.DataFrame([actual_reb_days, prev_reb_days, fut_reb_days]).transpose()
+    rebalancing_days_full.columns = ['actual_reb_day', 'prev_reb_day', 'fut_reb_day']
+
     p_largest_stocks = hf_rl.get_p_largest_stocks_all_reb_dates_V2(df, rebalancing_days_full, p)
 
     # [12490, 10401, 11850, 19553, 15966, 14541, 14357, 10604, 12060, 12079]
@@ -74,8 +83,8 @@ in_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\CRSP_2022_03.csv"
 end_date = 20220302
 estimation_window_length = -99
 out_of_sample_period_length = -99
-pf_size = 30  # [30, 50, 100, 225, 500]
-return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
+pf_size = 225  # [30, 50, 100, 225, 500]
+return_data_path = r"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL\5YR"
 
 create_data_matrices(path=in_path,
                      end_date=end_date,

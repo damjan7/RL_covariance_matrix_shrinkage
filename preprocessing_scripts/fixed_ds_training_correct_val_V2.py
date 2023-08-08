@@ -65,14 +65,8 @@ with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_dataset
 with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\QIS_p225.pickle", 'rb') as f:
     qis_p225 = pickle.load(f)
 
-
-
-# for actual, correct validation, need the future and past return matrices as well as the rebalancing days
-with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\past_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    past_return_matrices = pickle.load(f)
-
-with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    future_return_matrices = pickle.load(f)
+#with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\shrk_datasets\QIS_p100.pickle", 'rb') as f:
+#    qis_p100 = pickle.load(f)
 
 with open(rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\rebalancing_days_full.pickle", 'rb') as f:
     rebalancing_days_full = pickle.load(f)
@@ -151,18 +145,26 @@ def train_with_dataloader(normalize=False):
     # split dataset into train and validation
     batch_size = 16
     total_num_batches = factors.shape[0] // batch_size
-    len_train = int(total_num_batches * 0.5) * batch_size
+    len_train = int(total_num_batches * 0.7) * batch_size
+
+    # last date to consider for training: 20050103
+    end_train_idx = np.where(optimal_shrk_data['date'] == 20050103)[0][0]
+    train_idxes = [i*21 for i in range(end_train_idx//21)]
     train_dataset = MyDataset(
-        factors.iloc[:len_train, :],
-        fixed_shrk_data.iloc[:len_train, :],
-        optimal_shrk_data.iloc[:len_train, :],
+        factors.iloc[train_idxes, :],
+        fixed_shrk_data.iloc[train_idxes, :],
+        optimal_shrk_data.iloc[train_idxes, :],
         normalize=normalize
     )
 
+    # now for validation, do it correctly
+    # 2005 01 03 + 21 days -> first date of val set, then every 21 days
+    start_val_idx = np.where(factors.index == '2005-01-24')[0][0]
+    val_idxes = [start_val_idx + i*21 for i in range((factors.shape[0]-start_val_idx) // 21)]
     val_dataset = MyDataset(
-        factors.iloc[len_train:, :],
-        fixed_shrk_data.iloc[len_train:, :],
-        optimal_shrk_data.iloc[len_train:, :],
+        factors.iloc[val_idxes, :],
+        fixed_shrk_data.iloc[val_idxes, :],
+        optimal_shrk_data.iloc[val_idxes, :],
         normalize=False,
     )
     if normalize == True:
@@ -186,7 +188,7 @@ def train_with_dataloader(normalize=False):
             out_shrk = torch.argmin(out) / 100
             # CALC LOSS AND BACKPROPAGATE
             optimizer.zero_grad()
-            loss = criterion(out, labels) + criterion(opt_shrk, labels[-1])
+            loss = criterion(out, labels)  # MSE between outputs of NN and pf std --> pf std can be interpreted
             # as value of taking action a in state s, hence want my network to learn this
             # loss += criterion(out_shrk, opt_shrk)
             loss.backward()
@@ -200,6 +202,9 @@ def train_with_dataloader(normalize=False):
         if epoch % 10 == 0:
             print("break :-)")
             # calc validation loss
+
+        # log at end of epoch
+        wandb.log({"train loss": np.mean(epoch_loss)})
 
         # validate at end of epoch
         # set model into evaluation mode and deactivate gradient collection
@@ -217,99 +222,23 @@ def train_with_dataloader(normalize=False):
                 actual_argmin_validationset.append(torch.argmin(labels).item())
 
             # print mean and sd of val loss
-            print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
-            # set model back into train mode
+        print(f"Validation Loss of Epoch {epoch} (mean and sd): {np.mean(epoch_val_loss)}, {np.std(epoch_val_loss)}")
+        if True == False:
+            actual_results = eval_funcs.correct_validationset_evaluation(val_preds, pf_size)
+            print(actual_results)
 
-            # return mean pf std of opt shrk estimator and shrk estimators chosen by my network
-            pfstd1, pfstd2, pfstd1_sd, pfstd2_sd = eval_funcs.evaluate_preds(val_preds,
-                                                       val_dataset.optimal_shrk_data,
-                                                       val_dataset.fixed_shrk_data)
+        val_preds_shrkg = [i/100 for i in val_preds]
+        # eval_funcs.myplot(val_preds_shrkg, cov2para_shrkges)
 
-            print(f"Validation pf std with shrkges chosen by network: {pfstd1} \n"
-                  f"Validation pf std with shrkges chosen by {opt_shrk_name}: {pfstd2}")
-            print(f"Validation sd of pf std's [network]: ", pfstd1_sd)
-            print(f"Validation sd of pf std's {opt_shrk_name}: ", pfstd2_sd)
-            print(f"Validation PF std epoch {epoch} [QIS] (mean): {0.10245195394691942}")
-            print(f"Validation minimum attainable pf sd: ", 0.09259940834962073)
+        if epoch == 5:
+            print("f1")
+        elif epoch == 10:
+            print("f2")
+        elif epoch == 20:
+            print(f"f3")
 
-            # map predictions from 1 to 21 to shrinkage intensities
-            #mapped_shrkges = list(map(eval_funcs.f_map, val_preds))
-            mapped_shrkges = list(map(eval_funcs.f2_map, val_preds))
-
-            act_argmin_shrgks = list(map(eval_funcs.f2_map, actual_argmin_validationset))
-            y2 = val_dataset.optimal_shrk_data["shrk_factor"].values.tolist()
-
-            cov1para_val_ds = cov1para_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
-            covcor_shrk = covcor_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
-            covdiag_shrk = covdiag_p100.loc[list(val_dataset.optimal_shrk_data.index)]['shrk_factor'].values.tolist()
-            # eval_funcs.myplot(act_argmin_shrgks, mapped_shrkges, y2)
-            # <<eval_funcs.myplot(mapped_shrkges, y2)>>
-            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds)
-            # eval_funcs.myplot(mapped_shrkges, y2, cov1para_val_ds, covcor_shrk, covdiag_shrk)
-
-            '''
-            eval_funcs.myplot(val_dataset.factors.iloc[:, 0].tolist(), val_dataset.factors.iloc[:, 1].tolist(), 
-                              val_dataset.factors.iloc[:, 2].tolist(), val_dataset.factors.iloc[:, 3].tolist(), 
-                              val_dataset.factors.iloc[:, 4].tolist(), val_dataset.factors.iloc[:, 4].tolist(), 
-                              val_dataset.factors.iloc[:, 5].tolist(), val_dataset.factors.iloc[:, 6].tolist(), 
-                              val_dataset.factors.iloc[:, 7].tolist(), y2)
-            '''
-            val_indices = (int(factors.shape[0] * 0.5), factors.shape[0])
-            val_ds = fixed_shrk_data.iloc[val_indices[0]:val_indices[1], 2:]
-
-            val_indices = (4960, 8067)
-            val_indices = (4708, 7815)
-
-            if epoch == 5:
-                print("f1")
-            elif epoch == 7:
-                print("f")
-            elif epoch == 10:
-                print("f2")
-            elif epoch == 20:
-                print(f"f3")
-
-
-
-        path = rf"C:\Users\Damja\OneDrive\Damjan\FS23\master-thesis\code\return_matrices\RL"
+        # model back to train
         net.train()
-'''
-val_indices_correct = val_dataloader.dataset.optimal_shrk_data.index.values.tolist()
-val_indices_results = [val_indices_correct[0] + 21*i for i in range( (val_indices_correct[-1] - val_indices_correct[0]) // 21 + 1)]
-val_idxes_shrkges = [0 + 21*i for i in range( (val_indices[-1] - val_indices[0]) // 21 + 1 )]
-mapped_shrkges_v2 = np.array(mapped_shrkges)[val_idxes_shrkges]
-with open(rf"{path}\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    fut_ret_mats = pickle.load(f)
-with open(rf'{path}\past_return_matrices_p{pf_size}.pickle', 'rb') as f:
-    past_ret_mats = pickle.load(f)
-with open(rf"{path}\rebalancing_days_full.pickle", 'rb') as f:
-    reb_days = pickle.load(f)
-
-res = eval_funcs.temp_eval_fct(mapped_shrkges_v2, fut_ret_mats, past_ret_mats, reb_days, val_indices_results)
-'''
-
-
-'''
-correct val indices
-val_indices_correct = val_dataloader.dataset.optimal_shrk_data.index.values.tolist()
-val_indices_results = [val_indices_correct[0] + 21*i for i in range( (val_indices_correct[-1] - val_indices_correct[0]) // 21 + 1)]
-val_idxes_shrkges = [0 + 21*i for i in range( (val_indices[-1] - val_indices[0]) // 21 + 1 )]
-mapped_shrkges_v2 = np.array(mapped_shrkges)[val_idxes_shrkges]
-
-eval_funcs.myplot(mapped_shrkges_v2, optimal_shrk_data.shrk_factor[val_idxes_v2].values.tolist())
-
-eval_funcs.myplot(mapped_shrkges, val_dataset.optimal_shrk_data.shrk_factor.values.tolist())
-
-with open(rf"{path}\future_return_matrices_p{pf_size}.pickle", 'rb') as f:
-    fut_ret_mats = pickle.load(f)
-with open(rf'{path}\past_return_matrices_p{pf_size}.pickle', 'rb') as f:
-    past_ret_mats = pickle.load(f)
-with open(rf"{path}\rebalancing_days_full.pickle", 'rb') as f:
-    reb_days = pickle.load(f)
-    
-res = eval_funcs.temp_eval_fct(mapped_shrkges_v2, fut_ret_mats, past_ret_mats, reb_days, val_indices_results)
-
-'''
 
 
 # PARAMETERS:
@@ -323,10 +252,31 @@ optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
 criterion = nn.MSELoss()
 
 
+wandb.login()
+
+run = wandb.init(
+    project="fixed-ds-testing",
+    entity="damjan-thesis",
+    config={
+        "architecture": net,
+        "epochs": num_epochs,
+        "learning_rate": lr,
+        "hidden_layer_size": hidden_layer_size,
+    }
+
+)
 
 train_with_dataloader(normalize=False)
 
 print("done")
 
 
+def myplot(*args):
+    fig = plt.figure()
+    ax = plt.axes()
+    x = np.arange(len(args[0]))
+    for arg in args:
+        ax.plot(x, arg)
+    plt.legend()
+    plt.show()
 
